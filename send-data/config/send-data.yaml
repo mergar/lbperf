@@ -40,4 +40,4 @@ origin:
 post_process:
   enabled: true
   # Executable called in background after a successful upload: script <data_dir>
-  script: "/root/send-data/modules/lb-perf/init.sh"
+  script: "/root/lbperf/send-data/modules/lb-perf/init.sh"
