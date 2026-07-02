@@ -1,0 +1,576 @@
+#!/bin/sh
+pgm="${0##*/}"		# Program basename
+progdir="${0%/*}"	# Program directory
+MYARG=""
+MYOPTARG="DESTROY_DISK_DATA FILESYSTEM_TYPE_BLACKLIST FIO_AUTO_BS FIO_AUTO_DEPTH FIO_AUTO_JOBS FIO_AUTO_POST FIO_AUTO_PROFILE FIO_AUTO_RUNTIME FIO_AUTO_RWMIXREAD FIO_CHECKIN_SERVER FIO_OFFLINE_MODE XTRACE"
+
+alt_path=
+env_file=
+run_test=
+summary_path=
+
+while getopts "d:e:p:s:t:" opt; do
+	case "${opt}" in
+		d) debug="${OPTARG}" ;;
+		e) env_file="${OPTARG}" ;;
+		p) alt_path="${OPTARG}" ;;
+		s) summary_file="${OPTARG}" ;;
+		t) run_test="${OPTARG}" ;;
+	esac
+	shift $(($OPTIND - 1))
+done
+
+set -e
+. /usr/local/share/myb/fio-subr/system.subr
+set +e
+
+print_stats()
+{
+	local _hooks=
+	local _hooks_dir="/usr/local/share/myb/hooks.d/post.d"
+
+	${ECHO} "${H1_COLOR}======== [${PROFILE}] [bs:${FIO_BS},depth:${FIO_DEPTH},jobs:${FIO_NUMJOBS},rwmixread:${FIO_RWMIXREAD},fs:${FS}] result ========:${N0_COLOR}"
+	${ECHO} "${H2_COLOR}Read: ${R_MB}${N1_COLOR} MB/s ( ${H2_COLOR}${R_KB}${N1_COLOR} KB/s )${N0_COLOR}"
+	${ECHO} "${H2_COLOR}Write: ${W_MB}${N1_COLOR} MB/s ( ${H2_COLOR}${W_KB}${N1_COLOR} KB/s )${N0_COLOR}"
+	${ECHO} "${H2_COLOR}Read IOPS: ${R_IOPS} ( ${H1_CLOR}max:${R_IOPS_MAX},min:${R_IOPS_MIN} )${N0_COLOR}"
+	${ECHO} "${H2_COLOR}Write IOPS: ${W_IOPS} ( ${H1_CLOR}max:${W_IOPS_MAX},min:${W_IOPS_MIN} )${N0_COLOR}"
+
+	if [ -d "${_hooks_dir}" ]; then
+		_hooks=$( ${FIND_CMD} "${_hooks_dir}" -mindepth 1 -maxdepth 1 \( -type l -or -type f \) -and  \( -perm -u=x -o -perm -g=x -o -perm -o=x \) -exec ${BASENAME_CMD} {} \; )
+	fi
+
+	[ "${SENDFIO_DEBUG}" != "0" ] && echo "Hooks found: ${_hooks}"
+	for i in ${_hooks}; do
+		[ "${SENDFIO_DEBUG}" != "0" ] && echo "  :: ${i}"
+		${ENV_CMD} \
+		DEVICE="${FIO_DIRECTORY}" \
+		FIO_DIRECTORY="${FIO_DIRECTORY}" \
+		PROFILE="${PROFILE}" \
+		BS="${FIO_BS}" \
+		DEPTH="${FIO_DEPTH}" \
+		JOBS="${FIO_NUMJOBS}" \
+		RWMIXREAD="${FIO_RWMIXREAD}" \
+		FS="${FS}" \
+		R_MB="${R_MB}" \
+		R_KB="${R_KB}" \
+		W_MB="${W_MB}" \
+		W_KB="${W_KB}" \
+		R_IOPS="${R_IOPS}" \
+		R_IOPS_MAX="${R_IOPS_MAX}" \
+		R_IOPS_MIN="${R_IOPS_MIN}" \
+		W_IOPS="${W_IOPS}" \
+		W_IOPS_MAX="${W_IOPS_MAX}" \
+		W_IOPS_MIN="${W_IOPS_MIN}" \
+		${_hooks_dir}/${i}
+	done
+
+	[ -z "${summary_file}" ] && return 0
+	echo "profile: ${PROFILE},|fs: ${FS},|read: ${R_MB},|write: ${W_MB},|r-iops: ${R_IOPS},|w-iops: ${W_IOPS}" >> ${summary_file}
+}
+
+
+## MAIN
+init_color
+
+## FIO_ MACROS/PARAMS
+FIO_PARAMS="
+DIRECTORY
+RUNTIME
+BS
+IOENGINE
+DIRECT
+NUMJOBS
+THREAD
+SIZE
+IODEPTH
+RWMIXREAD
+"
+
+[ -z "${FIO_OFFLINE_MODE}" ] && FIO_OFFLINE_MODE=0
+
+# AUTO_XXX vars ?
+[ -n "${env_file}" -a -r "${env_file}" ] && . ${env_file}
+
+if [ -z "${run_test}" ]; then
+	# try to get vars from image boot
+	_AUTO_PROFILE=$( kenv mfsbsd.fio_auto_profile 2>/dev/null )
+	ret=$?
+
+	if [ ${ret} -eq 0 -a -n "${_AUTO_PROFILE}" ]; then
+		case "${_AUTO_PROFILE}" in
+			all|manual)
+				AUTO_PROFILE=
+				;;
+			*)
+				AUTO_PROFILE="${_AUTO_PROFILE}"
+				;;
+		esac
+	fi
+else
+	AUTO_PROFILE="${run_test}"
+fi
+
+if [ -z "${AUTO_PROFILE}" -o "${AUTO_PROFILE}" = "manual" ]; then
+	# SYNC
+	if [ ${FIO_OFFLINE_MODE} -eq 0 ]; then
+		echo "${CURL_CMD} ${CURL_OPT} -o /tmp/index.conf ${BENCH_INDEX_URL}"
+		_res=$( ${CURL_CMD} ${CURL_OPT} -s -o /tmp/index.conf.$$ ${BENCH_INDEX_URL} 2>&1 )
+		ret=$?
+		trap "${RM_CMD} -f /tmp/index.conf.$$" HUP INT ABRT BUS TERM EXIT
+		if [ ${ret} -ne 0 ]; then
+			echo "curl error: ${ret}"
+			err 1 "${_res}"
+		fi
+		${GREP_CMD} -v '^#' /tmp/index.conf.$$ > /tmp/index.conf
+	else
+		echo "info: use /usr/local/share/myb/fio/www/index.tests" 1>&2
+		${GREP_CMD} -v '^#' /usr/local/share/myb/fio/www/index.tests > /tmp/index.conf
+	fi
+
+	# check for "profile: desc" form in index
+	_test=$( ${HEAD_CMD} -n1 /tmp/index.conf | ${GREP_CMD} -q ':' 2>/dev/null )
+	_ret=$?
+
+	echo "fetched config:"
+	${CAT_CMD} /tmp/index.conf
+	echo
+	[ ${_ret} -ne 0 ] && err 1 "invalid config? needs 'profile: desc' form"
+
+	_tmpdir=$( ${MKTEMP_CMD} -d )
+	_tmpfile=$( ${MKTEMP_CMD} )
+
+	index=1
+
+	_def_method=$( ${CAT_CMD} /tmp/index.conf | ${SORT_CMD} -n | while read a; do
+		p1=${a%%:*}
+		p2=${a##*:}
+		[ -z "${p1}" ] && continue
+		[ ${index} -eq 1 ] && printf "${p1}"
+
+		echo "0:${p1}:" >> ${_tmpdir}/${p1}.item
+		${ECHO} "${H3_COLOR}Description: ${p2}${N0_COLOR}" > ${_tmpdir}/${p1}.descr
+		index=$(( index + 1 ))
+	done )
+
+	subject="Select test profile (${_def_method}):"
+	${ECHO} "${N1_COLOR}${subject}${N0_COLOR}"
+	#/usr/local/bin/myb-select-item ${_tmpdir} ${_tmpfile} item ${_def_method}
+	/usr/local/bin/myb-select-item ${_tmpdir} ${_tmpfile} item ${_def_method} 2>/dev/null
+	_ret=$?
+	${RM_CMD} -rf ${_tmpdir}
+
+	if [ ${_ret} -ne 0 ]; then
+		# break or cancel
+		choose="0"
+	fi
+
+	PROFILE=$( ${CAT_CMD} ${_tmpfile} )
+	${RM_CMD} ${_tmpfile} /tmp/index.conf
+else
+	# autotests
+	PROFILE="${AUTO_PROFILE}"
+fi
+TYPE="fio"
+
+#unset TYPE PROFILE
+#. /tmp/test.conf
+
+#if [ -z "${TYPE}" ]; then
+#	echo "no such benchmark TYPE specified: ${BENCH_CONF_URL}"
+#	exit 1
+#fi
+if [ -z "${PROFILE}" ]; then
+	echo "no such benchmark PROFILE specified: ${PROFILE}"
+	exit 1
+fi
+
+# inherit PROFILE for test chains
+export AUTO_PROFILE="${PROFILE}"
+
+if [ -n "${env_file}" ]; then
+	if [ -r "${env_file}" ]; then
+		${MV_CMD} ${env_file} ${env_file}.tmp
+		${GREP_CMD} -v ^AUTO_PROFILE ${env_file}.tmp > ${env_file}
+		${RM_CMD} -f ${env_file}.tmp
+	fi
+	echo "AUTO_PROFILE=\"${PROFILE}\"" >> ${env_file}
+fi
+
+if [ -r /etc/os-release ]; then
+	NAME=
+	PRETTY_NAME=
+	. /etc/os-release
+	if [ -n "${PRETTY_NAME}" ]; then
+		OPSYS="${PRETTY_NAME}"
+	elif [ -n "${NAME}" ]; then
+		OPSYS="${NAME}"
+	else
+		OPSYS="${OS}"
+	fi
+fi
+
+BENCH_TPL="${checkin_server}/${TYPE}/${PROFILE}.fio"
+BENCH_CONFIG="${checkin_server}/${TYPE}/${PROFILE}.config"
+BENCH_DEFAULTS_CONFIG="${checkin_server}/${TYPE}/defaults.config"
+
+[ "${SENDFIO_DEBUG}" != "0" ] && echo "TPL2: ${BENCH_TPL}, CFG: ${BENCH_CONFIG}, OFFLINE: ${FIO_OFFLINE_MODE}"
+
+if [ ${FIO_OFFLINE_MODE} -eq 0 ]; then
+	_res=$( ${CURL_CMD} ${CURL_OPT} -o /tmp/defaults.config ${BENCH_DEFAULTS_CONFIG} 2>&1 )
+	ret=$?
+	if [ ${ret} -ne 0 ]; then
+		echo "a: curl fatal error: ${ret}"
+		err 1 "${_res}"
+	fi
+else
+	${CP_CMD} -a /usr/local/share/myb/fio/www/defaults.config /tmp/defaults.config
+	ret=$?
+fi
+
+[ -r /tmp/defaults.config ] && . /tmp/defaults.config
+
+# per-template extra/custom
+if [ ${FIO_OFFLINE_MODE} -eq 0 ]; then
+	_res=$( ${CURL_CMD} ${CURL_OPT} -o /tmp/${PROFILE}.config ${BENCH_CONFIG} 2>&1 )
+	ret=$?
+	if [ ${ret} -ne 0 ]; then
+		echo "b: curl fatal error: ${ret}"
+		err 1 "${_res}"
+	fi
+else
+	${CP_CMD} -a /usr/local/share/myb/fio/www/${PROFILE}.config /tmp/defaults.config
+	ret=$?
+fi
+
+[ -r /tmp/${PROFILE}.config ] && . /tmp/defaults.config
+[ -r /tmp/profile.conf.tpl ] && ${RM_CMD} -f /tmp/profile.conf.tpl
+
+if [ ${FIO_OFFLINE_MODE} -eq 0 ]; then
+	_res=$( ${CURL_CMD} ${CURL_OPT} -o /tmp/profile.conf.tpl ${BENCH_TPL} 2>&1 )
+	ret=$?
+	if [ ${ret} -ne 0 ]; then
+		echo "c: curl fatal error: ${ret}"
+		err 1 "${_res}"
+	fi
+else
+	${CP_CMD} -a /usr/local/share/myb/fio/www/${PROFILE}.fio /tmp/profile.conf.tpl
+	ret=$?
+fi
+
+${GREP_CMD} -q "^rw=" /tmp/profile.conf.tpl
+ret=$?
+if [ ${ret} -ne 0 ]; then
+	echo "broken/wrong profile: ${BENCH_TPL}, no rw= ?"
+	exit 1
+fi
+
+# get from env first
+if [ -z "${FIO_AUTO_RWMIXREAD}" ]; then
+	if [ -n "${FIO_AUTO_PROFILE}" ]; then
+		# unattended
+		FIO_RWMIXREAD="${FIO_AUTO_RWMIXREAD}"
+	else
+		# read from per-profile/custom?
+		_FIO_AUTO_RWMIXREAD=$( kenv mfsbsd.fio_auto_rwmixread 2>/dev/null )
+		ret=$?
+
+		if [ ${ret} -eq 0 -a -n "${_FIO_AUTO_RWMIXREAD}" ]; then
+			FIO_RWMIXREAD="${_FIO_AUTO_RWMIXREAD}"
+			FIO_AUTO_RWMIXREAD="${_FIO_AUTO_RWMIXREAD}"
+		fi
+	fi
+else
+	FIO_RWMIXREAD="${FIO_AUTO_RWMIXREAD}"
+fi
+
+[ -z "${FIO_RWMIXREAD}" ] && FIO_RWMIXREAD="50"
+
+TYPE_UPPER=$( echo "${TYPE}" | ${TR_CMD} '[:lower:]' '[:upper:]' )
+eval MY_PARAMS="\$${TYPE_UPPER}_PARAMS"
+
+# Other AUTO_ settings
+if [ -n "${MY_PARAMS}" ]; then
+	for i in ${MY_PARAMS}; do
+		eval VAL="\$FIO_AUTO_${i}"
+		if [ -n "${VAL}" ]; then
+			[ "${SENDFIO_DEBUG}" != "0" ] && echo "environment override for: $i (${VAL})"
+			eval FIO_${i}="${VAL}"
+		fi
+	done
+else
+	${ECHO} "${W1_COLOR}No PARAMS vars${N0_COLOR}"
+	exit 1
+fi
+
+if [ -z "${FIO_THREAD}" ]; then
+	case "${OS}" in
+		FreeBSD|Liman)
+			FIO_THREAD=$( ${SYSCTL_CMD} -n hw.ncpu )
+			;;
+		Linux|SpaceVM)
+			FIO_THREAD=$( ${GREP_CMD} ^processor /proc/cpuinfo | ${WC_CMD} -l | ${AWK_CMD} '{printf $1}' )
+			;;
+	esac
+fi
+
+# interactive
+if [ -z "${FIO_AUTO_RWMIXREAD}" ]; then
+	case "${PROFILE}" in
+		rw|randrw)
+			for i in 1 2 3; do
+				${ECHO} "${N1_COLOR}mixed workload is specified: ${N2_COLOR}${PROFILE}${N1_COLOR}"
+				${ECHO} "${N1_COLOR}Please adjust/confirm RWMIXREAD values (Default: ${N2_COLOR}${FIO_RWMIXREAD}${N1_COLOR})${N0_COLOR}"
+				${ECHO} "${N1_COLOR} (For example, --rwmixread=${N2_COLOR}30${N1_COLOR} would mean that ${N2_COLOR}30%${N1_COLOR} of the I/O will be reads and ${N2_COLOR}70%${N1_COLOR} will be writes${N0_COLOR}"
+				read _RWMIXREAD
+				if [ -z "${_RWMIXREAD}" ]; then
+					${ECHO} "${N1_COLOR}Confirmed: ${N2_COLOR}${FIO_RWMIXREAD}${N0_COLOR}"
+					break
+				fi
+				case "${_RWMIXREAD}" in
+					''|*[!0-9]*)
+						${ECHO} "${N1_COLOR}Wrong valued, please use 0-100 values${N0_COLOR}"
+						continue
+						;;
+					*)
+						if [ ${_RWMIXREAD} -gt 100 ]; then
+							${ECHO} "${N1_COLOR}Wrong valued, please use 0-100 values${N0_COLOR}"
+							continue
+						fi
+						${ECHO} "${N1_COLOR}Adjusted: ${N2_COLOR}${_RWMIXREAD}${N0_COLOR}"
+						FIO_RWMIXREAD="${_RWMIXREAD}"
+						break
+						;;
+				esac
+			done
+		;;
+	esac
+fi
+
+[ -z "${FIO_RWMIXREAD}" ] && FIO_RWMIXREAD="50"
+
+# overrides
+#FIO_DIRECTORY="/storages/local${FIO_DIRECTORY}"
+#FIO_DIRECTORY="/storages/zfs/z150_12${FIO_DIRECTORY}"
+#FIO_IOENGINE="libaio"
+[ "${SENDFIO_DEBUG}" != "0" ] && echo $MY_PARAMS
+
+# overrides
+if [ -n "${alt_path}" ]; then
+	echo "ALTPOOL: ${alt_path}"
+	FIO_DIRECTORY="${alt_path}"
+fi
+
+
+CBSD_PERF_DISTRO=
+[ -r /etc/rc.conf ] && . /etc/rc.conf
+
+if [ -n "${FIO_SELECTED_DISK}" ]; then
+	FIO_DIRECTORY="${FIO_SELECTED_DISK}"
+	IS_RAW_DEVICE=1
+else
+	IS_RAW_DEVICE=0
+fi
+
+if [ -z "${FIO_DIRECT}" ]; then
+	[ "${SENDFIO_DEBUG}" != "0" ] && printf "Auto-detect if O_DIRECT flags is supported ${FIO_DIRECTORY}: "
+	if [ ${IS_RAW_DEVICE} -eq 0 ]; then
+		[ ! -d "${FIO_DIRECTORY}" ] && ${MKDIR_CMD} -p ${FIO_DIRECTORY}
+		${TOUCH_CMD} ${FIO_DIRECTORY}/test
+		if /usr/local/bin/myb-direct-supported ${FIO_DIRECTORY}/test 2>/dev/null; then
+			[ "${SENDFIO_DEBUG}" != "0" ] && echo "supported"
+			FIO_DIRECT="1"
+		else
+			[ "${SENDFIO_DEBUG}" != "0" ] && echo "not supported"
+			FIO_DIRECT="0"
+		fi
+		${RM_CMD} -f ${FIO_DIRECTORY}/test
+	fi
+	if /usr/local/bin/myb-direct-supported ${FIO_DIRECTORY} 2>/dev/null; then
+		[ "${SENDFIO_DEBUG}" != "0" ] && echo "supported"
+		FIO_DIRECT="1"
+	else
+		[ "${SENDFIO_DEBUG}" != "0" ] && echo "not supported"
+		FIO_DIRECT="0"
+	fi
+fi
+
+if [ -z "${FIO_BS}" ]; then
+	[ "${SENDFIO_DEBUG}" != "0" ] && printf "Auto-detect for BS ${FIO_DIRECTORY}: "
+	if [ ${IS_RAW_DEVICE} -eq 1 ]; then
+		FIO_BS="1m"
+	else
+		FIO_BS="4k"
+	fi
+	[ "${SENDFIO_DEBUG}" != "0" ] && echo "${FIO_BS}"
+fi
+if [ -n "${MY_PARAMS}" ]; then
+	for i in ${MY_PARAMS}; do
+		eval VAL="\$${TYPE_UPPER}_${i}"
+#		echo "X $VAL"
+		if [ -z "${VAL}" ]; then
+			${ECHO} "${W1_COLOR}fioloop: params empty: ${N2_COLOR}${i}${N0_COLOR}"
+			exit 1
+		fi
+#		${SED_CMD} -i'' "s#%%i%%#${VAL}#g" /tmp/profile.conf.tpl
+		${SED_CMD} -i${sed_delimer}'' -Ees:"%%${i}%%":"${VAL}":g /tmp/profile.conf.tpl
+	done
+else
+	${ECHO} "${W1_COLOR}No PARAMS vars${N0_COLOR}"
+	exit 1
+fi
+
+
+${MV_CMD} /tmp/profile.conf.tpl /tmp/profile.fio
+[ "${SENDFIO_DEBUG}" != "0" ] && echo "FIO_DIR: ${FIO_DIRECTORY}"
+[ -d /tmp/myb-perf-fio/tests ] && ${RM_CMD} -rf /tmp/myb-perf-fio/tests
+${MKDIR_CMD} -p /tmp/myb-perf-fio/tests/${FIO_BS}
+
+# VEIL
+#IN_USE=$( df -h /storages/local/tmp/test/job.0.0 | ${GREP_CMD} -v Filesystem | ${AWK_CMD} '{printf $5}' )
+#echo "pool:${FIO_DIRECTORY},inuse:${IN_USE}" > /tmp/myb-perf-fio/tests/extra_info.txt
+
+[ "${SENDFIO_DEBUG}" != "0" ] && echo "CHECK for: ${FIO_DIRECTORY}/job.0.0"
+if [ -n "${FIO_DIRECTORY}" -a "${FIO_DIRECTORY}" != "/" ]; then
+	if [ -d "${FIO_DIRECTORY}" ]; then
+		if [ -r "${FIO_DIRECTORY}/job.0.0" ]; then
+			[ "${SENDFIO_DEBUG}" != "0" ] && echo "Clean dir: ${FIO_DIRECTORY}"
+			for i in $( ${SEQ_CMD} 0 ${FIO_NUMJOBS} ); do
+				${RM_CMD} -f "${FIO_DIRECTORY}"/job.${i}.*
+			done
+			${RMDIR_CMD} "${FIO_DIRECTORY}" || true
+		else
+			# not for raw
+			true
+			#echo "no such dir for clean?: ${FIO_DIRECTORY}"
+		fi
+	fi
+fi
+
+if [ ${IS_RAW_DEVICE} -ne 1 ]; then
+	${MKDIR_CMD} -p "${FIO_DIRECTORY}"
+
+	_p1=$( ${DF_CMD} -h ${FIO_DIRECTORY} | ${TAIL_CMD} -n1 | ${AWK_CMD} '{printf $1}' )
+	case "${OS}" in
+		FreeBSD|Liman)
+			_fs=$( ${MOUNT_CMD} | ${GREP_CMD} "^${_p1} " | ${AWK_CMD} '{printf $4}' | ${TR_CMD} -d ',()' )
+			;;
+		Linux|SpaceVM)
+			_fs=$( ${MOUNT_CMD} | ${GREP_CMD} "^${_p1} " | ${AWK_CMD} '{printf $5}' | ${TR_CMD} -d ',()' )
+			;;
+	esac
+	if blacklist_type_exist "${_fs}"; then
+		echo "FIO_DIR (${FIO_DIRECTORY}) has pool type [${_fs}]: (blacklisted, skipp)"
+		exit 0
+	fi
+	FS="${_fs}"
+else
+	FS="raw"
+fi
+
+#CBSD_PERF_DISTRO=
+#[ -r /etc/rc.conf ] && . /etc/rc.conf
+if [ ${IS_RAW_DEVICE} -eq 1 ]; then
+	${CP_CMD} -a /tmp/profile.fio /tmp/profile.bak
+	${GREP_CMD} -v directory= /tmp/profile.bak > /tmp/profile.fio
+	if [ -z "${FIO_SELECTED_DISK}" ]; then
+		echo "No such FIO_SELECTED_DISK"
+		exit 1
+	fi
+	echo "filename=${FIO_SELECTED_DISK}" >> /tmp/profile.fio
+
+	i=$( echo ${FIO_SELECTED_DISK} | ${SED_CMD} s#/dev/##g )
+	dsk_info ${i}
+	conv2human ${BSIZE}
+	SIZE="${human_val}"
+	echo "raw disk: ${FIO_SELECTED_DISK},size: ${SIZE}, model: ${DSK_INFO}" > /tmp/myb-perf-fio/tests/extra_info.txt
+fi
+
+# VEIL
+#IN_USE=$( df -h /storages/local/tmp/test/job.0.0 | ${GREP_CMD} -v Filesystem | ${AWK_CMD} '{printf $5}' )
+#echo "pool:${FIO_DIRECTORY},inuse:${IN_USE}" > /tmp/myb-perf-fio/tests/extra_info.txt
+[ "${SENDFIO_DEBUG}" != "0" ] && echo "${FIO_CMD} --output-format=json --output=/tmp/myb-perf-fio/tests/${FIO_BS}/${PROFILE}-iodepth-${FIO_IODEPTH}-numjobs-${FIO_NUMJOBS}.json /tmp/profile.fio --eta-newline=1"
+
+# randread-iodepth-1-numjobs-2
+${FIO_CMD} --output-format=json --output=/tmp/myb-perf-fio/tests/${FIO_BS}/${PROFILE}-iodepth-${FIO_IODEPTH}-numjobs-${FIO_NUMJOBS}.json.tmp /tmp/profile.fio --eta-newline=1
+_ret=$?
+
+# skip potential errors in json:
+#fio: pid=299944, err=45/file:engines/posixaio.c:180, func=xfer, error=Operation not supported
+#fio: pid=299943, err=45/file:engines/posixaio.c:180, func=xfer, error=Operation not supported
+#fio: pid=299947, err=45/file:engines/posixaio.c:180, func=xfer, error=Operation not supported
+#fio: pid=299946, err=45/file:engines/posixaio.c:180, func=xfer, error=Operation not supported
+#fio: pid=299941, err=45/file:engines/posixaio.c:180, func=xfer, error=Operation not supported
+#fio: pid=299948, err=45/file:engines/posixaio.c:180, func=xfer, error=Operation not supported
+#fio: pid=299945, err=45/file:engines/posixaio.c:180, func=xfer, error=Operation not supported
+#fio: pid=299942, err=45/file:engines/posixaio.c:180, func=xfer, error=Operation not supported
+#{
+#  "fio version" : "fio-3.36",
+# ..
+grep ^fio: /tmp/myb-perf-fio/tests/${FIO_BS}/${PROFILE}-iodepth-${FIO_IODEPTH}-numjobs-${FIO_NUMJOBS}.json.tmp
+ret=$?
+if [ ${ret} -eq 0 ]; then
+	${GREP_CMD} -v ^fio: /tmp/myb-perf-fio/tests/${FIO_BS}/${PROFILE}-iodepth-${FIO_IODEPTH}-numjobs-${FIO_NUMJOBS}.json.tmp > /tmp/myb-perf-fio/tests/${FIO_BS}/${PROFILE}-iodepth-${FIO_IODEPTH}-numjobs-${FIO_NUMJOBS}.json
+else
+	${MV_CMD} /tmp/myb-perf-fio/tests/${FIO_BS}/${PROFILE}-iodepth-${FIO_IODEPTH}-numjobs-${FIO_NUMJOBS}.json.tmp /tmp/myb-perf-fio/tests/${FIO_BS}/${PROFILE}-iodepth-${FIO_IODEPTH}-numjobs-${FIO_NUMJOBS}.json
+fi
+
+#echo "/tmp/myb-perf-fio/tests/profile.txt
+
+echo "profile=\"${PROFILE}\"" > /tmp/myb-perf-fio/tests/fio.conf
+
+${GREP_CMD} "^[a-z]*=" /tmp/profile.fio | while read a; do
+	p1=${a%%=*}
+	p2=${a##*=}
+	case "${p1}" in
+		runtime|bs|ioengine|numjobs|size|iodepth|rwmixread)
+			echo "${a}" >> /tmp/myb-perf-fio/tests/fio.conf
+			;;
+		*)
+			;;
+	esac
+done
+
+# print result
+_json_data="/tmp/myb-perf-fio/tests/${FIO_BS}/${PROFILE}-iodepth-${FIO_IODEPTH}-numjobs-${FIO_NUMJOBS}.json"
+
+READ_BW_BYTES=$( ${CAT_CMD} ${_json_data} | ${JQ_CMD} '.jobs[0].read.bw_bytes' | ${TR_CMD} -d '"' )
+WRITE_BW_BYTES=$( ${CAT_CMD} ${_json_data} | ${JQ_CMD} '.jobs[0].write.bw_bytes' | ${TR_CMD} -d '"' )
+R_IOPS=$( ${CAT_CMD} ${_json_data} | ${JQ_CMD} '.jobs[0].read.iops' | ${TR_CMD} -d '"' )
+R_IOPS_MIN=$( ${CAT_CMD} ${_json_data} | ${JQ_CMD} '.jobs[0].read.iops_min' | ${TR_CMD} -d '"' )
+R_IOPS_MAX=$( ${CAT_CMD} ${_json_data} | ${JQ_CMD} '.jobs[0].read.iops_max' | ${TR_CMD} -d '"' )
+W_IOPS=$( ${CAT_CMD} ${_json_data} | ${JQ_CMD} '.jobs[0].write.iops' | ${TR_CMD} -d '"' )
+W_IOPS_MIN=$( ${CAT_CMD} ${_json_data} | ${JQ_CMD} '.jobs[0].write.iops_min' | ${TR_CMD} -d '"' )
+W_IOPS_MAX=$( ${CAT_CMD} ${_json_data} | ${JQ_CMD} '.jobs[0].write.iops_max' | ${TR_CMD} -d '"' )
+
+#cp -a ${_json_data} /tmp/x.json
+
+R_KB=$(( READ_BW_BYTES / 1024 ))
+R_MB=$(( READ_BW_BYTES / 1024 / 1024 ))
+W_KB=$(( WRITE_BW_BYTES / 1024 ))
+W_MB=$(( WRITE_BW_BYTES / 1024 / 1024 ))
+
+echo
+echo
+print_stats
+# | ${COLUMN_CMD} -t
+
+echo
+
+# Clean
+if [ -n "${FIO_DIRECTORY}" -a "${FIO_DIRECTORY}" != "/" ]; then
+	if [ -d "${FIO_DIRECTORY}" ]; then
+		if [ -r "${FIO_DIRECTORY}/job.0.0" ]; then
+			[ "${SENDFIO_DEBUG}" != "0" ] && echo "Clean dir: ${FIO_DIRECTORY}"
+			for i in $( ${SEQ_CMD} 0 ${FIO_NUMJOBS} ); do
+				${RM_CMD} -f "${FIO_DIRECTORY}"/job.${i}.*
+			done
+			${RMDIR_CMD} "${FIO_DIRECTORY}" || true
+		else
+			# not for raw
+			#echo "no such dir for clean?: ${FIO_DIRECTORY}"
+			true
+		fi
+	fi
+fi
+
+exit ${_ret}

@@ -1,0 +1,6 @@
+read: sequential reads
+write: sequential writes
+randread: random reads
+randwrite: random writes
+rw: [MIXED] sequential mix of reads AND writes
+randrw: [MIXED] random mix of reads AND writes

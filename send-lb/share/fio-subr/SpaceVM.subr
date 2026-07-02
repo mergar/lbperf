@@ -1,0 +1,186 @@
+if [ ! "$_SPACEVM_SUBR" ]; then
+_SPACEVM_SUBR=1
+###
+
+ZFS_POOL_LIST=
+FILESYSTEM_LIST=
+
+zpool_exist()
+{
+	local _test="${1}"
+	local _i
+
+	for _i in ${ZFS_POOL_LIST}; do
+		[ "${_i}" = "${1}" ] && return 0
+	done
+
+	return 1
+}
+
+filesystem_exist()
+{
+	local _test="${1}"
+	local _i
+
+	for _i in ${FILESYSTEM_LIST}; do
+		[ "${_i}" = "${1}" ] && return 0
+	done
+
+	return 1
+}
+
+fio_loop()
+{
+	local _env_file=
+	local _pool_name=
+	local _p1
+
+	[ -r /tmp/run-fio-myb-volumes.conf ] && ${RM_CMD} -f /tmp/run-fio-myb-volumes.conf
+	trap "${RM_CMD} -f /tmp/run-fio-myb-volumes.conf" HUP INT ABRT BUS TERM EXIT
+	${MOUNT_CMD} | ${GREP_CMD} "on /storages/" | while read _src _on _mnt _type _fs _nop; do
+
+		if blacklist_type_exist "${_fs}"; then
+			echo "found pool [${_fs}]: ${_mnt} (blacklisted type: [${_fs}], skipp)"
+			continue
+		fi
+
+		#echo "s:${_src} o:${_on} m:${_mnt} t:${_type} f:[${_fs}]"
+		# TODO: skip for local! see below
+		case "${_fs}" in
+			zfs)
+				_pool_name=$( zfs get -Ho value name ${_mnt} 2>/dev/null )
+				[ -z "${_pool_name}" ] && continue
+				_p1=${_pool_name%%/*}
+				if ! zpool_exist "${_p1}"; then
+					ZFS_POOL_LIST="${ZFS_POOL_LIST} ${_p1}"
+					echo "found pool [${_fs}]: ${_mnt} (parent: ${_p1})"
+				else
+					echo "found pool [${_fs}]: ${_mnt} (parent: ${_p1} (already queued, skipp))"
+					continue
+				fi
+				echo "${_fs} ${_mnt}" >> /tmp/run-fio-myb-volumes.conf
+				;;
+			*)
+				_p1=$( df -h ${_mnt} | tail -n1 | awk '{printf $1}' )
+
+				if ! filesystem_exist "${_p1}"; then
+					FILESYSTEM_LIST="${FILESYSTEM_LIST} ${_p1}"
+					echo "found pool [${_fs}]: ${_mnt} (parent: ${_p1})"
+				else
+					echo "found pool [${_fs}]: ${_mnt} (parent: ${_p1} (already queued, skipp))"
+					continue
+				fi
+
+				echo "found pool [${_fs}]: ${_mnt}"
+				echo "${_fs} ${_mnt}" >> /tmp/run-fio-myb-volumes.conf
+				;;
+		esac
+	done
+
+	echo "${FIND_CMD} /storages/local/ -maxdepth 1 -mindepth 1 -type d -exec ${BASENAME_CMD} {} \;"
+	if [ -d /storages/local ]; then
+		${FIND_CMD} /storages/local/ -maxdepth 1 -mindepth 1 -type d -exec ${BASENAME_CMD} {} \; | while read _pool_name; do
+			_mnt="/storages/local/${_pool_name}"
+
+			_p1=$( df -h ${_mnt} | tail -n1 | awk '{printf $1}' )
+			_fs=$( mount |grep "^${_p1} " | awk '{printf $5}' )
+			if blacklist_type_exist "${_fs}"; then
+				echo "found pool [${_fs}]: ${_mnt} (blacklisted type: [${_fs}], skipp)"
+				continue
+			fi
+
+			_fs="local"
+
+			_p1=$( df -h ${_mnt} | tail -n1 | awk '{printf $1}' )
+
+			if ! filesystem_exist "${_p1}"; then
+				FILESYSTEM_LIST="${FILESYSTEM_LIST} ${_p1}"
+				echo "found LOCAL pool [${_fs}]: ${_mnt} (parent: ${_p1})"
+			else
+				echo "found LOCAL pool [${_fs}]: ${_mnt} (parent: ${_p1} (already queued, skipp))"
+				continue
+			fi
+
+			echo "${_fs} ${_mnt}" >> /tmp/run-fio-myb-volumes.conf
+		done
+	fi
+
+	#systemd-1 on /storages/gfs2/gfs2_3053831c type autofs (rw,relatime,fd=61,pgrp=1,timeout=0,minproto=5,maxproto=5,direct,pipe_ino=35865)
+	#systemd-1 on /storages/gfs2/gfs2_6f66bb21 type autofs (rw,relatime,fd=62,pgrp=1,timeout=0,minproto=5,maxproto=5,direct,pipe_ino=34844)
+	#/dev/mapper/veil_sys_vg01-local_storage on /storages/local type ext4 (rw,relatime,stripe=64)
+	#z150_11 on /storages/zfs/z150_11 type zfs (rw,noatime,xattr,posixacl)
+	#/dev/mapper/3600143801259dcf30001000001640000 on /storages/gfs2/gfs2_3053831c type gfs2 (rw,noatime,nodiratime,debug,x-systemd.automount,_netdev)
+
+	if [ -r /tmp/run-fio-myb-volumes.conf ]; then
+
+		_tmpdir=$( ${MKTEMP_CMD} -d )
+		_tmpfile=$( ${MKTEMP_CMD} )
+		${ECHO} "${H3_COLOR}Description: scan ALL pools${N0_COLOR}" > ${_tmpdir}/ALL.descr
+		echo "0:ALL:" >> ${_tmpdir}/ALL.item
+
+		index=1
+		_def_method=$( ${CAT_CMD} /tmp/run-fio-myb-volumes.conf | ${SORT_CMD} -n | while read a b; do
+			_mnt=$( echo ${b} | tr '/' "_" )
+			[ ${index} -eq 1 ] && printf "${_mnt}"
+			${ECHO} "${H3_COLOR}Description: ${b}, type: [${a}]${N0_COLOR}" > ${_tmpdir}/${_mnt}.descr
+			echo "0:${_mnt}:" >> ${_tmpdir}/${_mnt}.item
+			echo "${b}" > ${_tmpdir}/${_mnt}.real
+			index=$(( index + 1 ))
+		done )
+
+		subject="Select pool to scan (${_def_method}):"
+		${ECHO} "${N1_COLOR}${subject}${N0_COLOR}"
+		/usr/local/bin/myb-select-item ${_tmpdir} ${_tmpfile} item ${_def_method} 2>/dev/null
+		_ret=$?
+
+		if [ ${_ret} -ne 0 ]; then
+			# break or cancel
+			choose="0"
+		fi
+
+		POOL=$( ${CAT_CMD} ${_tmpfile} )
+		echo "CHECK FOR ${_tmpdir}/${POOL}.real"
+		ls -la ${_tmpdir}/
+
+		${RM_CMD} ${_tmpfile} /tmp/index.conf 2>/dev/null
+
+		if [ -r "${_tmpdir}/${POOL}.real" ]; then
+			POOL=$( cat ${_tmpdir}/${POOL}.real )
+		fi
+
+		${RM_CMD} -rf ${_tmpdir}
+
+		[ -z "${POOL}" ] && exit 0
+		if [ "${POOL}" != "ALL" ]; then
+			${CP_CMD} -a /tmp/run-fio-myb-volumes.conf /tmp/run-fio-myb-volumes.conf.$$
+			${GREP_CMD} " ${POOL}" /tmp/run-fio-myb-volumes.conf.$$ > /tmp/run-fio-myb-volumes.conf
+			${RM_CMD} -f /tmp/run-fio-myb-volumes.conf.$$
+		fi
+
+		[ ! -d /tmp/myb-perf-fio/tests ] && ${MKDIR_CMD} -p /tmp/myb-perf-fio/tests
+
+		# pass environment file for AUTO_PROFILE
+		_env_file=$( mktemp )
+
+		${CAT_CMD} /tmp/run-fio-myb-volumes.conf | while read _fs _mnt; do
+			IN_USE=$( df -h ${_mnt} | ${GREP_CMD} -v Filesystem | ${AWK_CMD} '{printf $5}' )
+			echo "fs:${_fs},pool:${_mnt},inuse:${IN_USE}" > /tmp/myb-perf-fio/tests/extra_info.txt
+			echo "/tmp/myb-perf-fio/tests/extra_info.txt saved"
+			${CAT_CMD} /tmp/myb-perf-fio/tests/extra_info.txt
+			# Linux require </dev/tty ;-/
+			${ECHO} "${N1_COLOR}Pool: ${N2_COLOR}${_mnt}${N0_COLOR}"
+			/usr/local/bin/myb-perf-fio-fioloop -e ${_env_file} -p ${_mnt}/tmp/test ${SUMMARY_FILE_ARGS} </dev/tty && /usr/local/bin/myb-perf-fio-send
+			${RM_CMD} -f /tmp/myb-perf-fio/tests/extra_info.txt
+		done
+
+		[ -r ${_env_file} ] && ${RM_CMD} -f ${_env_file}
+
+	else
+		/usr/local/bin/myb-perf-fio-fioloop ${ALT_PATH} ${SUMMARY_FILE_ARGS} </dev/tty && /usr/local/bin/myb-perf-fio-send
+		_ret=$?
+		return ${_ret}
+	fi
+}
+
+###
+fi

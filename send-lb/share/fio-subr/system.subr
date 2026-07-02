@@ -1,0 +1,354 @@
+if [ ! "$_SYSTEM_SUBR" ]; then
+_SYSTEM_SUBR=1
+###
+
+export LANG=en_US.UTF-8
+[ -z "${SENDFIO_DEBUG}" ] && SENDFIO_DEBUG=1
+
+# fatal error. Print message to stdout then quit with exitval
+err() {
+	exitval=$1
+	shift
+	echo "$*" 1>&2
+	exit ${exitval}
+}
+
+# check for function existance
+fn_exists()
+{
+	# 'grep' before macros here
+	LC_ALL=C type ${1} | grep -q 'shell function'
+}
+
+# usage
+case "${1}" in
+	-h|--help|help)
+		echo "${0}: ${DESC}"
+		echo "mandatory: ${MYARG}"
+		echo "optional: ${MYOPTARG}"
+
+		if fn_exists usage 2>/dev/null; then
+			usage
+		fi
+		exit 0
+		;;
+esac
+
+
+# init/bootstrap handler: validate/init params/environments
+for i in ${MYARG}; do
+	eval T="\$$i"
+	[ -z "${T}" ] && continue
+	# store/push environment vars in o${PARAM}
+	export o${i}="${T}"
+done
+
+for i in ${MYOPTARG}; do
+	eval T="\$$i"
+	[ -z "${T}" ] && continue
+	# store/push environment vars in o${PARAM}
+	export o${i}="${T}"
+done
+
+# read global config
+for i in myb-perf-fio.conf.sample myb-perf-fio.conf; do
+	[ -r /usr/local/etc/send-fio/${i} ] && . /usr/local/etc/send-fio/${i}
+done
+
+# read script-specific (per-command) vars
+for i in ${pgm}.conf.sample ${pgm}.conf; do
+	[ -r /usr/local/etc/send-fio/${i} ] && . /usr/local/etc/send-fio/${i}
+done
+
+# 'uname' before macros here
+OS=$( uname -s )
+
+case "${OS}" in
+	Linux|SpaceVM)
+		ECHO="/usr/bin/echo -e"
+		id_token_file='/var/run/send-perf-stats'
+		# Linux require -i'', not -i ' '
+		sed_delimer=
+		;;
+	FreeBSD|Liman)
+		ECHO="echo -e"
+		id_token_file='/var/db/send-perf-stats'
+		sed_delimer=" "
+		;;
+esac
+
+if [ -r /etc/os-release ]; then
+	NAME=
+	PRETTY_NAME=
+	. /etc/os-release
+	if [ -n "${NAME}" ]; then
+		OPSYS="${NAME}"
+	elif [ -n "${PRETTY_NAME}" ]; then
+		OPSYS="${PRETTY_NAME}"
+	else
+		OPSYS="${OS}"
+	fi
+fi
+
+if [ -r /etc/rc.conf ]; then
+	. /etc/rc.conf
+	[ -n "${CBSD_PERF_DISTRO}" ] && OPSYS="Liman"
+fi
+
+set -e
+. /usr/local/share/myb/fio-subr/color.subr
+. /usr/local/share/myb/fio-subr/system.subr
+. /usr/local/share/myb/fio-subr/network.subr
+set +e
+
+if [ -r "/usr/local/share/myb/fio-subr/${OPSYS}.subr" ]; then
+	[ "${SENDFIO_DEBUG}" != "0" ] && echo "Info: OS-specific subr found: ${OPSYS}.subr" 1>&2
+	. "/usr/local/share/myb/fio-subr/${OPSYS}.subr"
+else
+	. /usr/local/share/myb/fio-subr/GenericOS.subr
+fi
+
+for i in ${MYARG}; do
+	# check for environment vars and pop/restore
+	eval T="\$o${i}"
+	if [ -n "${T}" ]; then
+		export $i="${T}"
+	else
+		eval T="\$$i"
+	fi
+	[ -z "${T}" ] && err 1 "${pgm}: empty ${i}= variable, please use ${pgm}.conf"
+done
+
+# pop/restore optional options
+for i in ${MYOPTARG}; do
+	eval T="\$o$i"
+	[ -z "${T}" ] && continue
+	# store/push environment vars in o${PARAM}
+	export ${i}="${T}"
+done
+
+
+UNAME_CMD=$( which uname )
+if [ ! -x "${UNAME_CMD}" ]; then
+	echo "error: no such command: uname"
+	exit 1
+fi
+
+TR_CMD=$( which tr )
+if [ ! -x "${TR_CMD}" ]; then
+	echo "error: no such command: tr"
+	exit 1
+fi
+
+
+# generic mandatory tools/script
+MAIN_CMD="
+awk
+basename
+cat
+column
+chmod
+chown
+cp
+curl
+cut
+dd
+df
+env
+find
+fio
+grep
+head
+jq
+ls
+mkdir
+mount
+mv
+mktemp
+openssl
+realpath
+rm
+rmdir
+sed
+seq
+sort
+strings
+sysctl
+tar
+tail
+tee
+truncate
+wc
+whoami
+"
+
+if [ "${USE_TOR}" = "YES" ]; then
+	MAIN_CMD="${MAIN_CMD} nc"
+fi
+
+case "${OS}" in
+	Linux|SpaceVM)
+		MAIN_CMD="${MAIN_CMD} lsblk"
+		;;
+	FreeBSD|Liman)
+		MAIN_CMD="${MAIN_CMD} camcontrol diskinfo"
+		;;
+esac
+
+for i in ${MAIN_CMD}; do
+	mycmd=
+	mycmd=$( which ${i} || true )		# true for 'set -e' case
+	if [ ! -x "${mycmd}" ]; then
+		echo "${pgm} error: no such executable dependency/requirement: ${i}"
+		exit 1
+	fi
+
+	MY_CMD=$( echo ${i} | ${TR_CMD} '\-[:lower:]' '_[:upper:]' )
+	MY_CMD="${MY_CMD}_CMD"
+	eval "${MY_CMD}=\"${mycmd}\""
+done
+
+MY_USER=$( ${WHOAMI_CMD} )
+if [ "${MY_USER}" != "root" ]; then
+	echo "${pgm} error: needs root privileges, my user: ${MY_USER}"
+	exit 1
+fi
+
+get_disk_id()
+{
+	local _val=
+	local _x=
+
+	_val=$( ${LS_CMD} -1 /dev/disk/by-id/ | while read _xid; do
+		_x=$( ${REALPATH_CMD} /dev/disk/by-id/${_xid} 2>/dev/null )
+		[ -z "${_x}" ] && continue
+		if [ "${_x}" = "${1}" ]; then
+			echo "${_xid}" && exit 0
+		else
+			continue
+		fi
+	done )
+
+	[ -z "${_val}" ] && _val="unknown"
+	printf "${_val}"
+}
+
+
+# return DSK_INFO (text/vendor info for /dev/$1 ) and BSIZE (size in bytes)
+dsk_info()
+{
+	local _dev="${1}"
+	[ "${XTRACE}" = "1" ] && set -o xtrace
+
+	DSK_INFO=
+	BSIZE=
+
+	case "${OS}" in
+		Linux|SpaceVM)
+			BSIZE=$( ${LSBLK_CMD} -n --raw ${1} | ${GREP_CMD} " disk" | ${AWK_CMD} '{printf $4}' )
+			DSK_INFO=$( get_disk_id ${1} )
+			return 0
+			;;
+		*)
+			true
+			;;
+	esac
+
+	# Try and find some identification information with camcontrol or atacontrol
+	DSK_INFO=$( ${CAMCONTROL_CMD} identify /dev/${_dev} 2>/dev/null | ${SED_CMD} -ne 's/^device model *//p' )
+	if [ -z "${DSK_INFO}" ]; then
+		# regex notes: camcontrol can be (order <device>,pass o_O?:
+		# # camcontrol devlist
+		# <TOSHIBA MG07ACA12TE 0104>         at scbus0 target 0 lun 0 (pass0,ada0)
+		# <TOSHIBA MG07ACA12TE 0104>         at scbus1 target 0 lun 0 (pass1,ada1)
+		# or
+		# # camcontrol devlist
+		#<Samsung SSD 980 1TB 1B4QFXO7>     at scbus8 target 0 lun 1 (pass0,nda0)
+		#<AMI Virtual CDROM0 1.00>          at scbus9 target 0 lun 0 (cd0,pass1)
+		#<AMI Virtual Floppy0 1.00>         at scbus10 target 0 lun 0 (da0,pass2)
+		#<AMI Virtual HDisk1 1.00>          at scbus11 target 0 lun 1 (da5,pass7)
+		DSK_INFO=$( ${CAMCONTROL_CMD} devlist | ${GREP_CMD} -E "(\(|,)${i}(\)|,)"   | ${GREP_CMD} '^<' )
+		DSK_INFO=${DSK_INFO#*<}
+		DSK_INFO=${DSK_INFO%>*}
+		if [ -n "${DSK_INFO}" ]; then
+			DSK_INFO=$( echo ${DSK_INFO} | ${TR_CMD} -d '<>' )
+		fi
+		if [ -z "${DSK_INFO}" ]; then
+			case "${1}" in
+				vtbd*)
+					DSK_INFO="Virtio block storage"
+					;;
+				*)
+					DSK_INFO="<Can not identify model>"
+					;;
+			esac
+		fi
+	fi
+
+	BSIZE=$( ${DISKINFO_CMD} /dev/${i} 2>/dev/null | ${AWK_CMD} '{printf $3}' )
+	[ -z "${BSIZE}" ] && BSIZE="0"
+	set + xtrace
+}
+
+conv2human()
+{
+	local lhal="B"
+	local tmpmem="$1"
+	local lval
+
+	human_val=""
+
+	for hval in "Kb" "Mb" "Gb" "Tb"; do
+		mem=$(( tmpmem / 1024 ))
+		[ "${mem}" = "0" ] && break
+		tmpmem=${mem}
+		lval="${hval}"
+	done
+
+	human_val="${tmpmem} ${lval}"
+}
+
+blacklist_type_exist()
+{
+	local _test="${1}"
+	local _i
+
+	for _i in ${FILESYSTEM_TYPE_BLACKLIST}; do
+		[ "${_i}" = "${1}" ] && return 0
+	done
+
+	return 1
+}
+
+#update_param /tmp/dacinst_installer/dsk EFI_INDEX "${_index}"
+update_param()
+{
+	local _dst="${1}"
+	local _param="${2}"
+	local _val="${3}"
+	local _ret=0
+
+	# todo: get old settings
+	set +e
+
+	if [ ! -r "${_dst}" ]; then
+		echo "${_param}=\"${_val}\"" >> "${_dst}"
+		return 0
+	fi
+
+	${GREP_CMD} -E -q "^${_param}=" "${_dst}"
+	_ret=$?
+	if [ ${_ret} -ne 0 ]; then
+		echo "${_param}=\"${_val}\"" >> "${_dst}"
+		return 0
+	fi
+
+	${CP_CMD} -a ${_dst} ${_dst}.swp
+	${GREP_CMD} -E -v "^${_param}=" ${_dst}.swp > ${_dst}
+	${RM_CMD} -f ${_dst}.swp
+	echo "${_param}=\"${_val}\"" >> "${_dst}"
+	return 0
+}
+
+###
+fi

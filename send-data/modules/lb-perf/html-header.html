@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+    <html lang="ru">
+    <head xmlns:og="http://ogp.me/ns#">
+        <meta http-equiv='Content-Type' content='text/html;charset=UTF-8'>
+        <title>LB-perf: Портал оценки производительности</title>
+        <link rel="stylesheet" href="style.css">
+        <link rel="stylesheet" href="font-awesome/css/font-awesome.min.css">
+        <script src="d3.js"></script>
+    </head>
+
+    <body>
+        <div class="dashboard">
+            <div class="header header-myb">
+                <div class="text">
+                    <i class="fa fa-line-chart"></i>
+                    <span>Установить агента</span>
+                    <span> ( или <a href="/perf.deb">deb</a> )</span>
+                </div>
+
+                <!-- <div class="controls-myb"></div> -->
+
+                <div class="checkbox checkbox-inset" style="margin: 10px;">
+                    <i class="fa fa-sun-o" style="color: orange;"></i>
+                    <input id="main_theme_id" type="checkbox" onchange="changeTheme(this.checked)">
+                    <label for="main_theme_id" title="Тема" class="checkbox-toggle" style="margin: 0px 5px;"></label>
+                    <i class="fa fa-moon-o" style="color: gray;"></i>
+                </div>
+
+                <button class="button" title="Как начать?" onclick="toggleInfoBlock(true)">
+                    <div class="button-content">
+                        <i class="fa fa-question-circle" style="color: #f28929;"></i>
+                        <!-- <span>How to start?</span> -->
+                    </div>
+                </button>
+
+                <a class="button" target="_blank" href="/preamble.html" title="Описание проекта">
+                    <div class="button-content">
+                        <i class="fa fa-info-circle" style="color: #f28929;"></i>
+                        <!-- <span>Описание проекта</span> -->
+                    </div>
+                </a>
+            </div>
+
+            <div class="main">
+                <div class="main-side">
+                    <button class="navigation-item" onclick="toggleForm(true)">
+                        <i class="fa fa-cog"></i>
+                        <span>Открыть форму</span>
+                    </button>
+                </div>
+                <div class="main-center">
+                    <!-- <div class="page"> -->
+                        <div class="winners-block page">
+                            <div class="header">
+                                <div class="text">
+                                    <!-- <img alt="" width="128" height="128" src="/img/winner.png"></img> -->
+                                    <span>ТОП-Рейтинг лучших результатов:</span>
+                                </div>
+                            </div>
+
+                            <table class="table inset">
+                                <thead>
+                                    <tr class="table-header">
+                                        <td class="table-column">Профиль нагрузки</td>
+                                        <td class="table-column">Информация о системе</td>
+                                        <td class="table-column">Engine</td>
+                                        <td class="table-column">Лучший результат</td>
+                                    </tr>
+                                </thead>
+
+                                <tbody style="overflow-y: auto;">
+                                    <tr class="table-area-object">
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                    </tr>
+                                    <tr class="table-area-object">
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                    </tr>
+                                    <tr class="table-area-object">
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div id="compare_block" class="compare-block page">
+                            <div class="compare" id="container"></div>
+                        </div>
+
+                        <div class="latest-block page">
+                            <div class="header">
+                                <div class="text">
+                                    <!-- <img alt="" width="128" height="128" src="/img/winner.png"></img> -->
+                                    <span>Последние 100 записей:</span>
+                                </div>
+
+                                <div class="controls">
+                                    <button class="button" id="show_chart_button" title="show chart" onclick="onShowChartButton()">
+                                        <div class="button-content">
+                                            <i class="fa fa-bar-chart" style="color: rgb(171 124 206);"></i>
+                                            <!-- <span>How to start?</span> -->
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <table id="records_table" class="table inset" style="max-height: 100vh; overflow: hidden;">
+                                <thead>
+                                    <tr class="table-header">
+                                        <td class="table-column check-multy">Сравнить</td>
+                                        <td class="table-column">Дата</td>
+                                        <td class="table-column">Кластер</td>
+                                        <td class="table-column">Гостевая ОС / оборудование</td>
+                                        <td class="table-column">Профиль нагрузки</td>
+                                        <td class="table-column">Результат</td>
+                                        <td class="table-column">Graph + Trace</td>
+                                    </tr>
+                                </thead>
+
+<tbody style="overflow-y: auto;" onchange="setSelections()">

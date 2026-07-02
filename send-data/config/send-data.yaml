@@ -1,0 +1,43 @@
+server:
+  listen: "0.0.0.0"
+  port: 8080
+  # TLS support is reserved for future use.
+  tls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+
+storage:
+  # Base spool directory (replaces hardcoded /usr/local/www/lbperf/spool).
+  #spool_dir: "/usr/local/www/lbperf/spool"
+  spool_dir: "/tmp/send-data-spool"
+
+auth:
+  token_secret: "_SuperMegaGigaPuperMyB_MegaSecret!"
+
+rate_limit:
+  getid_max_per_ip: 20
+  getid_interval_sec: 60
+  report_max_per_ip: 10
+  report_interval_sec: 60
+
+limits:
+  max_auth_get_size: 128
+  min_post_body_size: 64
+  max_post_body_size: 10485760
+
+proxy:
+  # When REMOTE_ADDR is listed here, client IP is taken from X-Forwarded-For.
+  trusted_addrs:
+    - "127.0.0.1"
+    - "::1"
+
+origin:
+  # Optional fixed public URL for Graph URL responses.
+  # If empty, built from Host + X-Forwarded-Proto on each request.
+  site: ""
+
+post_process:
+  enabled: true
+  # Executable called in background after a successful upload: script <data_dir>
+  script: "/root/send-data/modules/lb-perf/init.sh"

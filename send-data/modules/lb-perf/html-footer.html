@@ -1,0 +1,212 @@
+                                </tbody>
+                            </table>
+                        </div>
+                    <!-- </div> -->
+                </div>
+            </div>
+        </div>
+
+
+        <div class="footer">
+            <div class="controls controls-myb">
+                &copy; <a style="padding: 0px 5px;" href="https://disel.team/">DisEL</a>.
+            </div>
+        </div>
+
+        <form id="form_get" class="form" action="/scripts/run" method="post" style="display: none;">
+            <div class="form-header">
+                <span>Оценка производительности WEB/LB</span>
+                <button class="button" type="button" onclick="toggleForm(false)">
+                    <div class="button-content">
+                        <i class="fa fa-times-circle" style="color: #f15b5b;"></i>
+                    </div>
+                </button>
+            </div>
+
+            <div class="form-content">
+                <div class="form-field">
+                    <div class="input input-inset input-full">
+                        <label>Img type</label>
+                        <div class="input-content">
+                            <select name="type" id="type" class="new-select-item">
+                                <option value="iso">ISO-образ</option>
+                                <option value="raw">RAW-образ</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="form-field">
+                    <div class="input input-inset input-full">
+                        <label>Тест по-умолчанию (для автоматических сценариев)</label>
+                        <div class="input-content">
+                            <select name="profile" id="profile" class="new-select-item">
+                                <option value="all">all</option>
+                                <option value="manual" selected>manual</option>
+                                <option value="rps">rps</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="form-field">
+                    <div class="input input-inset input-full">
+                        <label>target (URL)</label>
+                        <div class="input-content">
+                            <input type="text" id="target" name="target" maxlength="30" size="20" value="http://127.0.0.1/index.html">
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="form-field">
+                    <div class="input input-inset input-full">
+                        <label>payloads_size (e.g.: 2, 4k, 1m, 1g ..)</label>
+                        <div class="input-content">
+                            <input type="text" id="payload_size" name="payload_size" maxlength="6" size="6" value="2">
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="form-field">
+                    <div class="input input-inset input-full">
+                        <label>concurrent (e.g.: '50' or range: '50-60')</label>
+                        <div class="input-content">
+                            <input type="text" id="concurrent" name="concurrent" maxlength="10" size="10" value="20-25">
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="form-field">
+                    <div class="input input-inset input-full">
+                        <label>threads</label>
+                        <div class="input-content">
+                            <input type="text" id="threads" name="threads" maxlength="3" size="3" value="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-field">
+                    <div class="input input-inset input-full">
+                        <label>requests_num</label>
+                        <div class="input-content">
+                            <input type="text" id="requests_num" name="requests_num" maxlength="10" size="10" value="1500000">
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="form-buttons">
+                <button id="performance_submit" type="submit" class="button white-color button-inset">
+                    <div class="button-content">
+                        <i class="fa fa-check-circle-o"></i>
+                        <span>Запуск</span>
+                    </div>
+                </button>
+            </div>
+        </form>
+
+        <div class="info-block" id="info_block" style="display: none;">
+            <ul class="list page">
+                <div class="header">
+                    <div class="text">
+                        <!-- <img alt="" width="128" height="128" src="/img/start.png"></img> -->
+                        <span>Как начать:</span>
+                    </div>
+                    <div class="controls"></div>
+                    <button class="button" onclick="toggleInfoBlock(false)">
+                        <div class="button-content">
+                            <i class="fa fa-times-circle" style="color: #f15b5b;"></i>
+                        </div>
+                    </button>
+                </div>
+
+                <li class="line">
+                    <div class="line-title">
+                        <span>
+                            1) test1
+                        </span>
+                    </div>
+                </li>
+
+                <li class="line">
+                    <div class="line-title">
+                        <span>
+                            2) test2
+                        </span>
+                    </div>
+                </li>
+
+                <li class="line">
+                    <div class="line-title">
+                        <span>
+                            Другие варианты:
+                        </span>
+                    </div>
+                    <ul class="list">
+                        <li class="line">
+                            <div class="middle line-title">
+                                <span>abc1</span>
+                            </div>
+                        </li>
+                        <li class="line">
+                            <div class="middle line-title">
+                                <span>abc2</span>
+                            </div>
+                        </li>
+                        <li class="line">
+                            <div class="middle line-title">
+                                <span>abc3</span>
+                            </div>
+                        </li>
+                        <li class="line">
+                            <div class="middle line-title">
+                                <span>abc4</span>
+                            </div>
+                        </li>
+                        <li class="line">
+                            <div class="middle line-title">
+                                <span>abc5</span>
+                            </div>
+                        </li>
+                        <li class="line">
+                            <div class="middle line-title">
+                                <span>abc6</span>
+                            </div>
+
+                            <div class="end line-title">
+                                <button class="button inset" title="title-test">
+                                    <div class="button-content">
+                                        <i class="fa fa-info"></i>
+                                    </div>
+                                </button>
+                            </div>
+                        </li>
+                    </ul>
+                </li>
+
+                <li class="line">
+                    <div class="line-title">
+                        <span>
+                            3) test33
+                        </span>
+                    </div>
+                </li>
+                <li class="line">
+                    <div class="line-title">
+                        <span>
+                            4) test44
+                        </span>
+                    </div>
+                </li>
+            </ul>
+        </div>
+
+        <script src="main.js"></script>
+    </body>
+</html>

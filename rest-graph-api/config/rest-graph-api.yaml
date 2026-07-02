@@ -1,0 +1,15 @@
+server:
+  listen: "0.0.0.0"
+  port: 8080
+  # TLS support is reserved for future use.
+  tls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+
+path:
+  data_dir: "/usr/jails/jails-data/lbperf2-data/usr/local/www/nginx-dist/data"
+  compare_script: "/root/newbench/scripts/compare-html.sh"
+
+compare:
+  result_host: "http://172.16.0.133"

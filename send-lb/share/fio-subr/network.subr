@@ -1,0 +1,513 @@
+if [ ! "$_NETWORK_SUBR" ]; then
+_NETWORK_SUBR=1
+###
+
+echo_begin()
+{
+	printf "$1 ... "
+}
+
+echo_end_success()
+{
+	${ECHO} "${H1_COLOR}SUCCESS${N0_COLOR}"
+}
+
+echo_err()
+{
+	${ECHO} "$1" >&2
+}
+
+log()
+{
+	echo "[`date "+%Y-%m-%d %H:%M:%S %z"`] $1 $2" >> $send_stats_log
+}
+
+fail()
+{
+	# log error
+	log "TERM" "$1 (failure)"
+	# let user know
+	echo_err "${W1_COLOR}${pgm} error: ${N2_COLOR}Send-stats failed: $1${N0_COLOR}"
+	exit 1
+}
+
+nlog()
+{
+	if [ ${DO_LOG_NET_TRAFFIC} -eq 1 ]; then
+		echo "--$(date)--" >> /tmp/send-perf-stats.$1.log
+		${TEE_CMD} -a /tmp/send-perf-stats.$1.log
+	else
+		${CAT_CMD}
+	fi
+}
+
+# do_http_request: if success returns 0, and prints http.body, otherwise returns 1
+do_http_request()
+{
+	local meth="$1"
+	local url="$2"
+	local body="$3"
+	local content_type="$4"
+	local do_log="$5"
+
+	local resp
+	local lineno
+	local in_header
+	local result_count
+	local NL=$'\n'
+	local _curl_args=
+
+	if [ -n "${HTTP_PROXY}" ]; then
+		url="http://${checkin_server}${url}"
+	fi
+
+	# --no-progress-meter
+	_curl_args="-s"
+
+	if [ -n "${content_type}" ]; then
+		if [ -z "${_curl_args}" ]; then
+			_curl_args="-H \"Content-Type: ${content_type}\""
+		else
+			_curl_args="${_curl_args} -H \"Content-Type: ${content_type}\""
+		fi
+	fi
+
+	#echo "meth[${meth}] url[${url}] body[${body}] content_type[${content_type}] do_log[${do_log}]" >> /tmp/send.log
+
+	case "${meth}" in
+		HEAD)
+			if [ -z "${_curl_args}" ]; then
+				_curl_args="-I"
+			else
+				_curl_args="${_curl_args} -I"
+			fi
+			;;
+		GET)
+			if [ -z "${_curl_args}" ]; then
+				_curl_args="-X GET -i"
+			else
+				_curl_args="${_curl_args} -X GET -i"
+			fi
+			;;
+		POST)
+			if [ -z "${_curl_args}" ]; then
+				_curl_args="-X POST"
+			else
+				_curl_args="${_curl_args} -X POST"
+			fi
+			;;
+	esac
+
+	resp=$( echo "${CURL_CMD} ${_curl_args} \"${checkin_server}${url}\"" | nlog "out" | /bin/sh - | nlog "in" 2>/dev/null )
+	_ret=$?
+	if [ ${_ret} -ne 0 ]; then
+		if [ ${do_log} -ne 0 ]; then
+			log "FAIL" "Failed to send data to the host ${nc_host}:${nc_port}, is network or host down?"
+		fi
+		return 1
+	fi
+
+#	${CURL_CMD} ${_curl_args} ${url}
+
+	resp=$( echo "${resp}" | ${TR_CMD} -d "\r" | ${TR_CMD} "\n" "|" )
+
+	lineno=0
+	in_header=1
+	http_result=""
+	body_result=""
+
+	local OIFS="${IFS}"
+	local IFS="|"
+
+	for str in ${resp}; do
+		IFS="${OIFS}"
+		# check for 'HTTP/1.[XX] 200 OK'
+		if [ ${lineno} -eq 0 ] ; then
+			if expr "${str}" : "^HTTP/1\.[01] 200 OK*" > /dev/null; then
+				http_result="STATUS=OK"
+				true
+			else
+				if [ ${do_log} -ne 0 ]; then
+					log "FAIL" "Failed HTTP query: request='${http_req}' -> response='${str}'"
+				fi
+				return 2
+			fi
+		elif [ ${lineno} -ge 1 -a ${in_header} -eq 1 ] ; then
+			if [ -z "${str}" -o "${str}" = "${NL}" ]; then
+				# reset header
+				in_header=0
+				result_count=0
+			fi
+		else
+			if [ $result_count -eq 0 ]; then
+				if [ ${in_header} -eq 1 ]; then
+					http_result="${str}"
+				else
+					body_result="${str}"
+				fi
+			else
+				if [ ${in_header} -eq 1 ]; then
+					http_result="${http_result}${NL}${str}"
+				else
+					body_result="${body_result}${NL}${str}"
+				fi
+			fi
+			result_count=$(($result_count+1))
+		fi
+		lineno=$(($lineno+1))
+		IFS="|"
+	done
+	IFS="${OIFS}"
+
+	#echo "${http_result}" >> /tmp/result
+	if [ -n "${body_result}" ]; then
+		echo "${body_result}"
+	else
+		echo "${http_result}"
+	fi
+
+	return 0
+}
+
+extract_field()
+{
+	# charset of the value, besides alnum covers base64 encoding charset (/+), and single quote
+	echo "$1" | ${GREP_CMD} "^${2}=" | ${TAIL_CMD} -1 | ${SED_CMD} -E -e "s/^${2}=([a-zA-Z0-9=/+']+).*/\1/g"
+}
+
+do_http_request_check_status()
+{
+	local body
+	local status
+	local what="$5"
+
+	# run request
+	body=$( do_http_request "$1" "$2" "$3" "$4" 1 )
+
+	if [ $? -ne 0 ]; then
+		fail "HTTP query failed during ${what}"
+	fi
+
+	# check status
+	status=$(extract_field "${body}" "STATUS")
+
+	case "${status}" in
+		OK)
+			# pass
+			true
+			;;
+		FAIL)
+			log "FAIL" "Got STATUS=FAIL from the server in during ${what}"
+			fail "${what} request failed"
+			;;
+		*)
+			fail "Server didn't return the status for ${what}"
+			;;
+	esac
+}
+
+uri_escape()
+{
+	# RFC 2396
+	echo "${1+$@}" | ${SED_CMD} -e '
+		s/%/%25/g
+		s/;/%3b/g
+		s,/,%2f,g
+		s/?/%3f/g
+		s/:/%3a/g
+		s/@/%40/g
+		s/&/%26/g
+		s/=/%3d/g
+		s/+/%2b/g
+		s/\$/%24/g
+		s/,/%2c/g
+		s/ /%20/g
+	'
+}
+
+# Handle HTTP proxy services
+#
+# HTTP_PROXY/http_proxy can take the following form:
+#    [http://][username:password@]proxy[:port][/]
+# Authentication details may also be provided via HTTP_PROXY_AUTH:
+#    HTTP_PROXY_AUTH="basic:*:username:password"
+#
+# IN:   * HTTP_PROXY or http_proxy
+# IN:   * HTTP_PROXY_AUTH
+# OUT:  * http_header_proxy_auth
+# OUT:  * nc_host
+# OUT:  * nc_port
+parse_http_proxy_string()
+{
+	local PROXY_AUTH_USER
+	local PROXY_AUTH_PASS
+	local PROXY_HOST
+	local PROXY_PORT
+
+	if [ -z "$HTTP_PROXY" -a -n "$http_proxy" ]; then
+		HTTP_PROXY=$http_proxy
+	fi
+	if [ -n "$HTTP_PROXY" ]; then
+		# Attempt to resolve any HTTP authentication
+		if [ -n "$HTTP_PROXY_AUTH" ]; then
+			PROXY_AUTH_USER=$(echo $HTTP_PROXY_AUTH | ${SED_CMD} -E 's/^.+:\*:(.+):.+$/\1/g')
+			PROXY_AUTH_PASS=$(echo $HTTP_PROXY_AUTH | ${SED_CMD} -E 's/^.+:\*:.+:(.+)$/\1/g')
+		else
+			# Check for authentication within HTTP_PROXY
+			HAS_HTTP_AUTH=$(echo $HTTP_PROXY | ${SED_CMD} -E 's/^(http:\/\/)?((.+:.+)@)?.+/\3/')
+			if [ -n "$HAS_HTTP_AUTH" ]; then
+				# Found HTTP authentication details
+				PROXY_AUTH_USER=$(echo $HAS_HTTP_AUTH | ${CUT_CMD} -d: -f1)
+				PROXY_AUTH_PASS=$(echo $HAS_HTTP_AUTH | ${CUT_CMD} -d: -f2)
+			fi
+		fi
+
+		# Determine the proxy components
+		PROXY_HOST=$(echo $HTTP_PROXY | ${SED_CMD} -E 's/^(http:\/\/)?(.+:.+@)?([^@:]+)(:.+)?/\3/')
+		PROXY_PORT=$(echo $HTTP_PROXY | ${SED_CMD} -E 's/^(http:\/\/)?(.+:.+@)?(.+):([0-9]+)/\4/' | ${SED_CMD} -e 's/[^0-9]//g')
+		if [ -z "$PROXY_PORT" ]; then
+			# Use default proxy port
+			PROXY_PORT=3128
+		fi
+	fi
+
+	# Determine the host/port netcat should connect to
+	if [ -n "$PROXY_HOST" -a -n "$PROXY_PORT" ]; then
+		nc_host=$PROXY_HOST
+		nc_port=$PROXY_PORT
+		# Proxy authentication, if required
+		if [ -n "$PROXY_AUTH_USER" -a -n "$PROXY_AUTH_PASS" ]; then
+			local auth_base64=$(echo -n "$PROXY_AUTH_USER:$PROXY_AUTH_PASS" | ${OPENSSL_CMD} base64)
+			http_header_proxy_auth="Basic $auth_base64"
+		fi
+		return 0
+	else
+		nc_host=$checkin_server
+		nc_port=80
+		return 1
+	fi
+}
+
+test_connection()
+{
+	local _body _ret
+	[ "${XTRACE}" = "1" ] && set -o xtrace
+
+	_body=$( do_http_request "HEAD" "/" "" "" 0 )
+	_ret=$?
+
+	if [ ${_ret} -ne 0 ]; then
+		log "FAIL" "Unable to connect to ${checkin_server_description}"
+		return ${_ret}
+	fi
+	set +o xtrace
+}
+
+setup_proxies() {
+	# TOR
+	if [ "${USE_TOR}" = "YES" ]; then
+	if [ -n "${HTTP_PROXY}" -o -n "${http_proxy}" ]; then
+		echo_err "Ignoring HTTP_PROXY since TOR is used"
+	fi
+	NC="${NC_CMD} -x localhost:9050 -X 5"
+		checkin_server_description="${checkin_server_description} (through TOR)"
+		return 0
+	fi
+
+	# HTTP proxy
+	if [ -n "${HTTP_PROXY}" -o -n "${http_proxy}" ]; then
+		parse_http_proxy_string
+		if [ $? -eq 0 ]; then
+			checkin_server_description="${checkin_server_description} (through proxy)"
+			return 0
+		fi
+	fi
+
+	# no proxy
+	return 0
+}
+
+
+get_id_token()
+{
+	[ "${XTRACE}" = "1" ] && set -o xtrace
+
+	if [ -f ${id_token_file} ]; then
+		if [ $( ${WC_CMD} -l < ${id_token_file} ) -lt 3 ]; then
+			${RM_CMD} -f ${id_token_file}
+		fi
+	fi
+
+	if [ ! -f ${id_token_file} -o ! -s ${id_token_file} ]; then
+		# generate the token file
+		${ECHO} "${N1_COLOR}Send-perf-stats runs on this system for the first time, generating registration ID...${N0_COLOR}"
+		IDTOKEN=$( uri_escape $(${OPENSSL_CMD} rand -base64 32 ) )
+		if [ $? -ne 0 ]; then
+			fail "Failed to generate IDTOKEN"
+		fi
+
+		# receive KEY/TOKEN
+		local body
+		body=$( do_http_request "GET" "/scripts/getid.php?key=${IDTOKEN}" "" "" 1 )
+		_ret=$?
+
+		if [ ${_ret} -ne 0 ]; then
+			fail "HTTP query failed during key/token generation: please try later"
+		fi
+
+		echo "B:[$body]" >> /tmp/body.txt
+
+		KEY=$( extract_field "${body}" "KEY" )
+		TOKEN=$( extract_field "${body}" "TOKEN" )
+
+		# validate KEY/TOKEN
+		if [ ${#KEY} -lt 10 -o ${#KEY} -gt 64 -o ${#TOKEN} -lt 10 -o ${#TOKEN} -gt 64 ]; then
+			log "FAIL" "Invalid key/token received for IDTOKEN=${TOKEN}"
+			fail "Invalid key/token combination received from the server: wrong len: [${KEY}][${TOKEN}]"
+		fi
+		log "INFO" "Generated idtoken='${IDTOKEN}', received key=${KEY} and token=${TOKEN}"
+
+		# save KEY/TOKEN
+		(echo "# This file was auto-generated on $(date),"; \
+		echo "# and contains the Send-perf-stats registration credentials"; \
+		echo "KEY=${KEY}"; echo "TOKEN=${TOKEN}"; ) > ${id_token_file} && \
+		${CHOWN_CMD} 0:0 ${id_token_file} && \
+		${CHMOD_CMD} 600 ${id_token_file}
+		if [ $? -ne 0 ]; then
+			${RM_CMD} -f ${id_token_file}
+			fail "Failed to create identification file ${id_token_file}"
+		fi
+		log "INFO" "Created identification file ${id_token_file}"
+	fi
+
+	# read the token file into the global variables
+	. ${id_token_file}
+	KEY=$( uri_escape ${KEY} )
+	TOKEN=$( uri_escape ${TOKEN} )
+
+	set +o xtrace
+
+	return 0
+}
+
+enable_token()
+{
+	local _ret
+	do_http_request_check_status "GET" "/scripts/enable_token.php?key=${KEY}&token=${TOKEN}" "" "" "token enabling"
+	_ret=$?
+	log "INFO" "System enabled"
+}
+
+disable_token()
+{
+	#do_http_request_check_status "GET" "/scripts/disable_token.php?key=${KEY}&token=${TOKEN}" "" "" "token disabling"
+	log "INFO" "System disabled"
+}
+
+report_system()
+{
+	#local REL=$( uri_escape $( ${UNAME_CMD} -r ) )
+	local REL=$( ${UNAME_CMD} -r )
+	local ARCH=$( ${UNAME_CMD} -m )
+	local is_virtual= _jailed=
+
+	case "${OS}" in
+		FreeBSD|Liman)
+			local line=$( ${SYSCTL_CMD} -n hw.model )
+			local VEN=$( echo $line | ${CUT_CMD} -d ' ' -f 1 )
+			#local DEV=$( uri_escape $(echo $line | ${CUT_CMD} -d ' ' -f 2-) )
+			local DEV=$( echo $line | ${CUT_CMD} -d ' ' -f 2- )
+			local count=$( ${SYSCTL_CMD} -n hw.ncpu )
+			local smbios="$( kenv smbios.system.product )"
+			case "${smbios}" in
+				VirtualBox)
+					is_virtual="VIRTUALBOX"
+					;;
+				VMware*)
+					is_virtual="VMWARE"
+					;;
+				BHYVE)
+					is_virtual="BHYVE"
+					;;
+				*)
+					is_virtual="NONE(${smbios})"
+					;;
+			esac
+			_jailed=$( ${SYSCTL_CMD} -n security.jail.jailed )
+			[ "${_jailed}" = "1" ] && is_virtual="jail"
+			;;
+		Linux|SpaceVM)
+			is_virtual=$( systemd-detect-virt | ${TR_CMD} '[:lower:]' '[:upper:]' )
+			local line=$( ${GREP_CMD} "^model name" /proc/cpuinfo | ${HEAD_CMD} -n1 | ${CUT_CMD} -d ':' -f 2 )
+			local VEN=$( echo ${line} | ${AWK_CMD} '{printf $1}' )
+			local count=$( grep ^processor /proc/cpuinfo | ${WC_CMD} -l | ${AWK_CMD} '{printf $1}' )
+			#DEV=$( uri_escape $(echo "${line}" | ${CUT_CMD} -d ' ' -f 2- ))
+			DEV=$( echo "${line}" | ${CUT_CMD} -d ' ' -f 2- )
+			;;
+	esac
+
+	if [ -r /etc/os-release ]; then
+		NAME=
+		PRETTY_NAME=
+		. /etc/os-release
+		if [ -n "${PRETTY_NAME}" ]; then
+			OPSYS="${PRETTY_NAME}"
+		elif [ -n "${NAME}" ]; then
+			OPSYS="${NAME}"
+		else
+			OPSYS="${OS}"
+		fi
+	fi
+
+	if [ -r /etc/rc.conf ]; then
+		. /etc/rc.conf
+		[ -n "${CBSD_PERF_DISTRO}" ] && OPSYS="Liman"
+	fi
+
+#	OPSYS=$( uri_escape $( echo "${OPSYS}" ) )
+#	is_virtual=$( uri_escape $( echo "${is_virtual}" ) )
+
+	if [ -z "${SENDFIO_SEND_RESULT}" ]; then
+		# FIO
+		TYPE="fio"
+		${CAT_CMD} > /tmp/myb-perf-fio/tests/identify.txt <<________________EOF
+rel="${REL}"
+arch="${ARCH}"
+opsys="${OPSYS}"
+cpus="${count}"
+vendor="${VEN}"
+cpu_type="${DEV}"
+is_virtual="${is_virtual}"
+bench_type="${TYPE}"
+________________EOF
+
+		cd /tmp/myb-perf-fio
+		_res=$( ${TAR_CMD} cfz tests.tgz tests 2>&1 )
+		_ret=$?
+
+		if [ ${_ret} -ne 0 ]; then
+			echo "tar failed, errcode: ${_ret}"
+			err ${_ret} "${_res}"
+		fi
+		data=$( ${REALPATH_CMD} ./tests.tgz )
+	else
+		data=$( ${REALPATH_CMD} ${SENDFIO_SEND_RESULT} )
+	fi
+
+	[ ! -r "${data}" ] && err 1 "${pgm} error, not readable: ${data}"
+	echo_begin "${N1_COLOR}Posting perf statistics to: ${N2_COLOR}${checkin_server_description}${N0_COLOR}"
+	#echo "&bench_type=${TYPE}&bench_profile=${PROFILE}&fio_rbw_mb=${R_MB}&fio_rbw_kb=${RKB}&fio_wbw_mb=${W_MB}&fio_wbw_kb=${W_KB}"
+#	do_http_request_check_status "GET" "/scripts/report_system.php?token=${TOKEN}&key=${KEY}" "" "" "OS statistics submission"
+	_res=$( ${CURL_CMD} -sS -X POST -H "Content-Type: application/gzip" --data-binary "@$data" "${checkin_server}/scripts/report_system.php?token=${TOKEN}&key=${KEY}" )
+	ret=$?
+	if [ ${ret} -ne 0 ]; then
+		echo "Curl POST failed"
+		exit ${ret}
+	fi
+	echo_end_success
+	${ECHO} "${N1_COLOR}Uploaded, Thank you!${N0_COLOR}"
+	echo "${_res}"
+}
+
+###
+fi

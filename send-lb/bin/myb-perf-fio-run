@@ -1,0 +1,313 @@
+#!/bin/sh
+# Send FIO statistics to perf server
+pgm="${0##*/}"		# Program basename
+progdir="${0%/*}"	# Program directory
+MYARG=""
+MYOPTARG="DESTROY_DISK_DATA FILESYSTEM_TYPE_BLACKLIST FIO_AUTO_BS FIO_AUTO_DEPTH FIO_AUTO_JOBS FIO_AUTO_POST FIO_AUTO_PROFILE FIO_AUTO_RUNTIME FIO_AUTO_RWMIXREAD FIO_CHECKIN_SERVER FIO_OFFLINE_MODE XTRACE"
+
+usage()
+{
+	cat <<EOF
+Description:
+
+This is a set of scripts for testing I/O disk subsystem using the FIO utility. 
+The scripts have several profiles (easily extensible) and you can adjust some parameters. 
+The final result is printed on the screen and can be sent to an external resource.
+
+Can work both interactively and fully automatically (unattended mode).
+
+Options/Environments for unattended:
+
+FIO_OFFLINE_MODE   - do not receive FIO profiles from the checkin server;
+FIO_AUTO_POST  - do not post result to checkin server;
+
+FILESYSTEM_TYPE_BLACKLIST - skip any pools with the specified file systems, e.g.:
+                             FILESYSTEM_TYPE_BLACKLIST="gfs2 ext4 zfs";
+FIO_AUTO_PROFILE - select profile for test (can be multiple, use ',' for delimer):
+  'randread'  - random READ;
+  'randrw'    - (mixed): random READ/WRITE(mixer). FIO_AUTO_RWMIXREAD can be used (default: 50);
+  'randwrite' - random WRITE;
+  'read'      - sequential READ;
+  'rw'        - (mixer): sequential READ/WRITE. FIO_AUTO_RWMIXREAD can be used (default: 50);
+  'write'     - sequential WRITE.
+FIO_AUTO_RWMIXREAD - balance between read and write, default: 50;
+                     FIO_AUTO_RWMIXREAD=30  would mean that 30% of the I/O will be READs and 70% will be WRITEs;
+FIO_AUTO_POST      - post statistic to external MyB-perf service. FIO_CHECKIN_SERVER can be used:
+  '1' - to send statistics (by default);
+  '0' - to skip;
+FIO_CHECKIN_SERVER - override destination server for post statistics. Default: inherits ISO source site;
+FIO_AUTO_BS        - change 'fio' BS settings. Default: '4k';
+FIO_AUTO_DEPTH     - change 'fio' DEPTH settings;
+FIO_AUTO_JOBS      - change 'fio' JOBS settings;
+FIO_AUTO_RUNTIME   - change 'fio' RUNTIME settings;
+
+Example:
+
+env FIO_AUTO_POST=0 FIO_AUTO_PROFILE=read myb-perf-fio-run
+env FIO_AUTO_PROFILE=rw,randrw FIO_AUTO_RWMIXREAD=30 myb-perf-fio-run
+env CHECKIN_SERVER=https://perf.example.local myb-perf-fio-run
+
+EOF
+}
+
+set -e
+. /usr/local/share/myb/fio-subr/system.subr
+set +e
+
+if [ -n "${DESTROY_DISK_DATA}" ]; then
+	DESTROY_DISK_DATA="${DESTROY_DISK_DATA}"
+else
+	DESTROY_DISK_DATA=0
+fi
+CBSD_PERF_DISTRO=0
+
+[ -r /etc/rc.conf ] && . /etc/rc.conf
+
+# options
+#
+export PATH="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"
+CURR_VERSION="0.2"
+USE_TOR=NO
+DO_LOG_NET_TRAFFIC=1
+
+check_head_disk()
+{
+	local _res
+
+	[ -z "${1}" ] && return 2
+
+	[ -z "${tmpdir}" ] && tmpdir="/tmp"
+
+	${DD_CMD} if=${1} of=${tmpdir}/is_empty.$$ bs=256k count=1 > /dev/null 2>&1
+	_res=$( ${STRINGS_CMD} ${tmpdir}/is_empty.$$ | ${WC_CMD} -w | ${AWK_CMD} {'printf $1'} )
+	${RM_CMD} -f ${tmpdir}/is_empty.$$
+	if [ "${_res}" = "0" ]; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+## MAIN
+init_color
+[ "${SENDFIO_DEBUG}" != "0" ] && ${ECHO} "${N1_COLOR}OS: ${N2_COLOR}${OS}${N0_COLOR}"
+[ "${SENDFIO_DEBUG}" != "0" ] && ${ECHO} "${N1_COLOR}OPSYS: ${N2_COLOR}${OPSYS}${N0_COLOR}"
+
+if [ -n "${1}" ]; then
+	if [ ! -d "${1}" ]; then
+		if [ -e "${1}" ]; then
+			FIO_SELECTED_DISK="${1}"
+		else
+			err 1 "no such directory: ${1}"
+		fi
+	else
+		ALT_PATH="-p ${1}"
+	fi
+fi
+
+if [ -z "${FIO_SELECTED_DISK}" -a -n "${FIO_DIRECTORY}" ]; then
+	if [ ! -d "${FIO_DIRECTORY}" ]; then
+		if [ -e "${FIO_DIRECTORY}" ]; then
+			export FIO_SELECTED_DISK="${FIO_DIRECTORY}"
+		else
+			err 1 "no such directory: ${FIO_DIRECTORY}"
+		fi
+	else
+		ALT_PATH="-p ${FIO_DIRECTORY}"
+	fi
+fi
+
+if [ -n "${FIO_SELECTED_DISK}" ]; then
+	for i in ${FIO_SELECTED_DISK}; do
+		if [ "${DESTROY_DISK_DATA}" != "1" ]; then
+			check_head_disk ${i}
+			_ret=$?
+		else
+			_ret=0
+		fi
+
+		case "${_ret}" in
+			0)
+				true
+				;;
+			1)
+				dsk_info ${i}
+
+				err 1 "${H2_COLOR}${i} [${DSK_INFO}, Size: ${BSIZE} - DIRTY] (needs env DESTROY_DISK_DATA=1 to use this disk) ${N0_COLOR}"
+				;;
+		esac
+	done
+fi
+
+select_disks()
+{
+	local clean_disk_num=1
+	local clean_disk=
+	local _kern_disks=$( /sbin/sysctl -qn kern.disks )
+	local DISK_LIST=
+	local _def_method=
+	local _tmpdir=
+	local _tmpfile=
+
+	# scan for memory disk?
+	MDISK_LIST=
+	#MDISK_LIST=$( ${FIND_CMD} /dev -name md\[0-9\] -exec ${BASENAME_CMD} {} \; )
+
+	DISK_LIST=$( for i in ${_kern_disks} ${MDISK_LIST}; do
+		case "${i}" in
+			acd[0-9]*|cd[0-9]*|scd[0-9]*) continue ;;
+		esac
+		echo "${i}"
+	done | ${SORT_CMD} -u )
+
+	_tmpdir=$( ${MKTEMP_CMD} -d )
+	_tmpfile=$( ${MKTEMP_CMD} )
+
+	for i in ${DISK_LIST}; do
+		if [ "${DESTROY_DISK_DATA}" != "1" ]; then
+			check_head_disk /dev/${i}
+			_ret=$?
+		else
+			_ret=0
+		fi
+
+		case "${_ret}" in
+			0)
+				status="${clean_disk_num} - ${N2_COLOR}${i} ${H2_COLOR}[clean]${N0_COLOR}"
+				export clean_disk_name${clean_disk_num}="/dev/${i}"
+				[ ${clean_disk_num} -eq 1 ] && _def_method="${i}"
+				dsk_info ${i}
+
+				conv2human ${BSIZE}
+				SIZE="${human_val}"
+
+				echo "0:${i}:" >> ${_tmpdir}/${i}.item
+				${ECHO} "${H3_COLOR}${DSK_INFO}, Size: ${SIZE}${N0_COLOR}" > ${_tmpdir}/${i}.descr
+
+				if [ -z "${clean_disk}" ]; then
+					clean_disk="/dev/${i}"
+				else
+					clean_disk="${clean_disk} /dev/${i}"
+				fi
+				clean_disk_num=$(( clean_disk_num + 1 ))
+				;;
+			1)
+				dsk_info ${i}
+				conv2human ${BSIZE}
+				SIZE="${human_val}"
+
+				status="  - ${H2_COLOR}${i} [${DSK_INFO}, Size: ${SIZE} - DIRTY] (needs env DESTROY_DISK_DATA=1 to use this disk) ${N0_COLOR}"
+				;;
+		esac
+		${ECHO} "${status}"
+	done
+
+	if [ -z "${clean_disk}" ]; then
+		${ECHO} "No clean disk found, please add/use empty disk!"
+		[ -n "${DISK_LIST}" ] && ${ECHO} "Or re-run '${pgm}' scrript with DESTROY_DISK_DATA=1 env, e.g.: ${N2_COLOR}env DESTROY_DISK_DATA=1 ${pgm}${N0_COLOR} (Destroy the disk data for I/O perf test)"
+		exit 0
+	fi
+
+	SELECTED_DISK=
+
+	if [ ${clean_disk_num} -eq 1 ]; then
+		#eval _val="\$clean_disk_name$i"
+		eval _val="\$clean_disk_name0"
+		SELECTED_DISK="${_val}"
+		return 0
+	fi
+
+	clean_disk_num=$(( clean_disk_num - 1 ))
+
+	local subject="Select base sources:"
+	${ECHO} "${N1_COLOR}${subject}${N0_COLOR}"
+
+	#/usr/local/bin/myb-perf-fio-run ${_tmpdir} ${_tmpfile} item ${_def_method}
+	/usr/local/bin/myb-select-item ${_tmpdir} ${_tmpfile} item ${_def_method} 2>/dev/null
+	_ret=$?
+	${RM_CMD} -rf ${_tmpdir}
+
+	if [ ${_ret} -ne 0 ]; then
+		# break or cancel
+		choose="0"
+	fi
+	SELECTED_DISK=$( ${CAT_CMD} ${_tmpfile} )
+	SELECTED_DISK="/dev/${SELECTED_DISK}"
+	${RM_CMD} ${_tmpfile}
+
+#	echo "Choose: 1-${clean_disk_num}, 0 to cancel"
+#	choose=$( while [ true ]; do
+#		read p;
+#		case ${p} in
+#			[0-${clean_disk_num}])
+#				echo "${p}"
+#				exit 0
+#				;;
+#			*)
+#				continue
+#				;;
+#		esac
+#	done )
+
+	if [ "${choose}" = "0" ]; then
+		exit 0
+	fi
+#	eval _val="\$clean_disk_name${choose}"
+#	SELECTED_DISK="${_val}"
+}
+
+if [ -z "${FIO_SELECTED_DISK}" ]; then
+	if [ "${CBSD_PERF_DISTRO}" = "1" ]; then
+		${ECHO} "${N1_COLOR}Disks found:${N0_COLOR}"
+		select_disks
+		if [ ! -e "${SELECTED_DISK}" ]; then
+			echo "no such ${SELECTED_DISK}"
+			exit 1
+		fi
+		[ "${SENDFIO_DEBUG}" != "0" ] && echo "SELECTED ${SELECTED_DISK}"
+		update_param /etc/rc.conf FIO_SELECTED_DISK "${SELECTED_DISK}"
+	fi
+else
+	update_param /etc/rc.conf FIO_SELECTED_DISK "${FIO_SELECTED_DISK}"
+fi
+
+# network setup
+setup_proxies
+
+if [ "${FIO_OFFLINE_MODE}" = "0" ]; then
+	${ECHO} "${N1_COLOR}Checkin server: ${N2_COLOR}${checkin_server}${N0_COLOR}"
+	url="${checkin_server}"
+	test_connection
+	_ret=$?
+
+	if [ ${_ret} -ne 0 ]; then
+		FIO_OFFLINE_MODE=1
+		${ECHO} "${N1_COLOR}Connection failed, offline mode: on: ${N2_COLOR}${checkin_server}${N0_COLOR}"
+		log "INIT" "Connected failed, offline mode: on:${checkin_server_description}"
+	else
+		log "INIT" "Connected to ${checkin_server_description}"
+	fi
+fi
+
+export FIO_OFFLINE_MODE="${FIO_OFFLINE_MODE}"
+
+if [ -r "/usr/local/share/myb/fio-subr/${OPSYS}.subr" ]; then
+	. "/usr/local/share/myb/fio-subr/${OPSYS}.subr"
+fi
+
+SUMMARY_FILE=$( mktemp )
+${TRUNCATE_CMD} -s0 ${SUMMARY_FILE}
+SUMMARY_FILE_ARGS="-s ${SUMMARY_FILE}"
+
+fio_loop
+ret=$?
+
+echo
+echo "Summary:"
+${CAT_CMD} ${SUMMARY_FILE} | ${COLUMN_CMD} -t -s ','
+
+${RM_CMD} -f ${SUMMARY_FILE}
+
+${ECHO} "${N2_COLOR}Please type for re-run: ${N2_COLOR}/usr/local/bin/myb-perf-fio-run${N0_COLOR}"
+
+exit ${ret}

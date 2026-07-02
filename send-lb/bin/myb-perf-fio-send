@@ -1,0 +1,73 @@
+#!/bin/sh
+# Send FIO statistics to perf server
+pgm="${0##*/}"		# Program basename
+progdir="${0%/*}"	# Program directory
+MYARG=""
+MYOPTARG="FIO_AUTO_POST FIO_CHECKIN_SERVER FIO_OFFLINE_MODE XTRACE"
+
+set -e
+. /usr/local/share/myb/fio-subr/system.subr
+set +e
+
+[ "${FIO_OFFLINE_MODE}" = "1" ] && err 1 "${pgm}: skip reporting, offline mode"
+
+# env
+[ -z "${FIO_AUTO_POST}" ] && FIO_AUTO_POST="1"
+[ "${FIO_AUTO_POST}" = "0" ] && exit 0
+
+if [ -n "${SENDFIO_SEND_RESULT}" ]; then
+	echo "alternative result via SENDFIO_SEND_RESULT: ${SENDFIO_SEND_RESULT}"
+	[ ! -r "${SENDFIO_SEND_RESULT}" ] && err 1 "${pgm}: error, not found: ${SENDFIO_SEND_RESULT}"
+fi
+#
+#data="/tmp/x5.tgz"
+#curl -sS -X POST -H "Content-Type: application/gzip" --data-binary "@$data" ${checkin_server}/scripts/report_system.php?token=ssssssssssssssssss
+
+## MAIN: processing begins here
+##
+# network setup
+init_color
+
+#setup_proxies
+#${ECHO} "${N1_COLOR}Checkin server: ${N2_COLOR}${checkin_server}${N0_COLOR}"
+#url="${checkin_server}"
+
+#test_connection
+#_ret=$?
+#if [ ${_ret} -ne 0 ]; then
+#	echo "failed: test_connection"
+#	exit ${_ret}
+#fi
+#log "INIT" "Connected to ${checkin_server_description}"
+
+# prepare
+get_id_token
+_ret=$?
+if [ ${_ret} -ne 0 ]; then
+	echo "failed: get_id_token"
+	exit ${_ret}
+fi
+
+# begin
+enable_token
+_ret=$?
+if [ ${_ret} -ne 0 ]; then
+	echo "failed: enable_token"
+	exit ${_ret}
+fi
+
+report_system
+_ret=$?
+if [ ${_ret} -ne 0 ]; then
+	echo "failed: report_system"
+	exit ${_ret}
+fi
+
+disable_token
+_ret=$?
+if [ ${_ret} -ne 0 ]; then
+	echo "failed: disable_token"
+	exit ${_ret}
+fi
+
+exit ${_ret}

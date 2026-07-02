@@ -1,0 +1,68 @@
+if [ ! "$_FREEBSD_SUBR" ]; then
+_FREEBSD_SUBR=1
+###
+
+# main loop. can be overriden via subr/${OPSYS}.subr
+fio_loop()
+{
+	local _auto_profile_env _auto_profile
+	local _ret _all_profiles
+
+	[ "${XTRACE}" = "1" ] && set -o xtrace
+
+	if [ -z "${FIO_AUTO_PROFILE}" ]; then
+		_auto_profile_env=$( kenv mfsbsd.fio_auto_profile 2>/dev/null )
+		_ret=$?
+	else
+		# get from env
+		_auto_profile_env="${FIO_AUTO_PROFILE}"
+		_ret=0
+	fi
+
+	# debug
+	if [ ${_ret} -eq 0 -a -n "${_auto_profile_env}" ]; then
+			case "${_auto_profile_env}" in
+				all)
+					if [ ${FIO_OFFLINE_MODE} -eq 0 ]; then
+						echo "${CURL_CMD} ${CURL_OPT} -o /tmp/index.conf ${BENCH_INDEX_URL}"
+
+						${CURL_CMD} ${CURL_OPT} -o /tmp/index.conf.$$ ${BENCH_INDEX_URL} > /tmp/curl.$$ 2>&1
+						ret=$?
+
+						trap "${RM_CMD} -f /tmp/curl.$$ /tmp/index.conf.$$" HUP INT ABRT BUS TERM EXIT
+
+						if [ ${ret} -ne 0 ]; then
+							echo "curl error: ${ret}"
+							${CAT_CMD} /tmp/curl.$$
+							exit 1
+						fi
+						${GREP_CMD} -v '^#' /tmp/index.conf.$$ > /tmp/index.conf
+					else
+						echo "info: use /usr/local/share/myb/fio/www/index.tests" 1>&2
+						${GREP_CMD} -v '^#' /usr/local/share/myb/fio/www/index.tests > /tmp/index.conf
+					fi
+					echo "fetched config:"
+					${CAT_CMD} /tmp/index.conf
+					echo
+					_all_profiles=$( ${CAT_CMD} /tmp/index.conf | ${CUT_CMD} -d : -f1 | ${TR_CMD} '\r\n' ' ' )
+					;;
+				*)
+					_all_profiles="${_auto_profile_env}"
+					;;
+			esac
+	fi
+
+	if [ -n "${_all_profiles}" ]; then
+		for i in ${_all_profiles}; do
+			/usr/local/bin/myb-perf-fio-fioloop -t ${i} ${ALT_PATH} ${SUMMARY_FILE_ARGS} && /usr/local/bin/myb-perf-fio-send
+		done
+	else
+		/usr/local/bin/myb-perf-fio-fioloop ${ALT_PATH} ${SUMMARY_FILE_ARGS} && /usr/local/bin/myb-perf-fio-send
+	fi
+
+	set +o xtrace
+	return 0
+}
+
+###
+fi
