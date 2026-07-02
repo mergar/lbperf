@@ -508,7 +508,7 @@ async function onShowChartButton() { // метод по кнопке
     if (data && data.status === 'ok' && data.url) {
         window.open(data.url, '_blank');
     } else {
-        alert('Не удалось получить URL для сравнения. Проверьте, что nginx проксирует /api/v1/compare/ на 172.16.0.92:8080.');
+        alert('Не удалось получить URL для сравнения. Проверьте, что nginx проксирует /api/v1/compare/ на rest-graph-api.');
     }
 
     isDisableChartButton(selections.length !== 2);

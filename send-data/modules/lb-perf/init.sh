@@ -1,4 +1,8 @@
 #!/bin/sh
+progdir="${0%/*}"
+[ "$progdir" = "$0" ] && progdir="."
+progdir=$( cd "$progdir" && pwd -P )
+
 SOURCE_DIR="$1"
 MAX_RECORDS="100"
 DT=$( date )
@@ -49,7 +53,8 @@ done
 if [ 3 -gt 2 ]; then
 
 if [ ! -d "${SOURCE_DIR}" ]; then
-	echo "no such source dir: ${SOURCE_DIR}"
+	ls -la ${SOURCE_DIR}
+	echo "no such source dir: [${SOURCE_DIR}]"
 	exit 0
 fi
 
@@ -264,8 +269,8 @@ fi
 
 
 ## Начало генерации HTML
-echo "HTML gen"
-cat /root/send-data/modules/lb-perf/html-header.html > /usr/local/www/nginx/index.html
+echo "HTML gen $progdir"
+cat ${progdir}/html-header.html > /usr/local/www/nginx/index.html
 
 ${FIND_CMD} ${DATA_ROOT_DST}/ -type d -name tests.\* -exec ${REALPATH_CMD} {} \; | while read _line; do
         basename=$( ${BASENAME_CMD} ${_line} )
@@ -391,6 +396,6 @@ EOF
 
 done
 
-cat /root/send-data/modules/lb-perf/html-footer.html >> /usr/local/www/nginx/index.html
+cat ${progdir}/html-footer.html >> /usr/local/www/nginx/index.html
 
 exit 0

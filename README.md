@@ -3,9 +3,9 @@
 Это пока сборная солянка не готовая к промышленному использованию тк находится в глубокой R&D фазе MVP и поиску путей-идей-алгоритмов-решений.
 
 ### Debian deps:
-
+server-side
 ```
-apt install -y gcc golang make curl nginx
+apt install -y gcc golang make curl nginx jq sqlite3 gnuplot
 ```
 
 
