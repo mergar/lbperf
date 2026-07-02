@@ -4,6 +4,9 @@ set -eu
 # Resolve script directory in a POSIX-compatible way.
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 
+echo $SCRIPT_DIR
+exit 0
+
 # Исправленные пути в соответствии с вашей структурой проекта
 MAIN_DIR="$SCRIPT_DIR/cmd/send-data"
 OUTPUT_BIN="$SCRIPT_DIR/send-data"
