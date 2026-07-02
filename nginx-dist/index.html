@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+    <html lang="ru">
+    <head xmlns:og="http://ogp.me/ns#">
+        <meta http-equiv='Content-Type' content='text/html;charset=UTF-8'>
+        <title>LB-perf: Портал оценки производительности</title>
+        <link rel="stylesheet" href="style.css">
+        <link rel="stylesheet" href="font-awesome/css/font-awesome.min.css">
+        <script src="d3.js"></script>
+    </head>
+
+    <body>
+        <div class="dashboard">
+            <div class="header header-myb">
+                <div class="text">
+                    <i class="fa fa-line-chart"></i>
+                    <span>Установить агента</span>
+                    <span> ( или <a href="/perf.deb">deb</a> )</span>
+                </div>
+
+                <!-- <div class="controls-myb"></div> -->
+
+                <div class="checkbox checkbox-inset" style="margin: 10px;">
+                    <i class="fa fa-sun-o" style="color: orange;"></i>
+                    <input id="main_theme_id" type="checkbox" onchange="changeTheme(this.checked)">
+                    <label for="main_theme_id" title="Тема" class="checkbox-toggle" style="margin: 0px 5px;"></label>
+                    <i class="fa fa-moon-o" style="color: gray;"></i>
+                </div>
+
+                <button class="button" title="Как начать?" onclick="toggleInfoBlock(true)">
+                    <div class="button-content">
+                        <i class="fa fa-question-circle" style="color: #f28929;"></i>
+                        <!-- <span>How to start?</span> -->
+                    </div>
+                </button>
+
+                <a class="button" target="_blank" href="/preamble.html" title="Описание проекта">
+                    <div class="button-content">
+                        <i class="fa fa-info-circle" style="color: #f28929;"></i>
+                        <!-- <span>Описание проекта</span> -->
+                    </div>
+                </a>
+            </div>
+
+            <div class="main">
+                <div class="main-side">
+                    <button class="navigation-item" onclick="toggleForm(true)">
+                        <i class="fa fa-cog"></i>
+                        <span>Открыть форму</span>
+                    </button>
+                </div>
+                <div class="main-center">
+                    <!-- <div class="page"> -->
+                        <div class="winners-block page">
+                            <div class="header">
+                                <div class="text">
+                                    <!-- <img alt="" width="128" height="128" src="/img/winner.png"></img> -->
+                                    <span>ТОП-Рейтинг лучших результатов:</span>
+                                </div>
+                            </div>
+
+                            <table class="table inset">
+                                <thead>
+                                    <tr class="table-header">
+                                        <td class="table-column">Профиль нагрузки</td>
+                                        <td class="table-column">Информация о системе</td>
+                                        <td class="table-column">Engine</td>
+                                        <td class="table-column">Лучший результат</td>
+                                    </tr>
+                                </thead>
+
+                                <tbody style="overflow-y: auto;">
+                                    <tr class="table-area-object">
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                    </tr>
+                                    <tr class="table-area-object">
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                    </tr>
+                                    <tr class="table-area-object">
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                        <td class="table-area-property">-</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div id="compare_block" class="compare-block page">
+                            <div class="compare" id="container"></div>
+                        </div>
+
+                        <div class="latest-block page">
+                            <div class="header">
+                                <div class="text">
+                                    <!-- <img alt="" width="128" height="128" src="/img/winner.png"></img> -->
+                                    <span>Последние 100 записей:</span>
+                                </div>
+
+                                <div class="controls">
+                                    <button class="button" id="show_chart_button" title="show chart" onclick="onShowChartButton()">
+                                        <div class="button-content">
+                                            <i class="fa fa-bar-chart" style="color: rgb(171 124 206);"></i>
+                                            <!-- <span>How to start?</span> -->
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <table id="records_table" class="table inset" style="max-height: 100vh; overflow: hidden;">
+                                <thead>
+                                    <tr class="table-header">
+                                        <td class="table-column check-multy">Сравнить</td>
+                                        <td class="table-column">Дата</td>
+                                        <td class="table-column">Кластер</td>
+                                        <td class="table-column">Гостевая ОС / оборудование</td>
+                                        <td class="table-column">Профиль нагрузки</td>
+                                        <td class="table-column">Результат</td>
+                                        <td class="table-column">Graph + Trace</td>
+                                    </tr>
+                                </thead>
+
+<tbody style="overflow-y: auto;" onchange="setSelections()">
+                                    <tr class="table-area-object" data-id="1782912515">
+                                        <td data-id="1782912515" class="table-area-property check-multy">
+                                            <input type="checkbox" name="compare" value="1782912515" onchange="setSelections()">
+                                        </td>
+                                        <td class="table-area-property">#1782912515<br>(2026-07-01 16:28:35):<br> lab001: NGINX (backend) без TLS, UDS: /tmp/nginx1.sock</td>
+                                        <td class="table-area-property">виртуальная среда?: , AMD Ryzen 9 3900X 12-Core Processor (3793.02-MHz K8-class CPU)</td>
+                                        <td class="table-area-property">backend: X5-nginx, FRONTEND PROTO: http/1.1, BACKEND_PROTO:http/1.1, 
+lab_nginx_tls:0, 
+lab_haproxy_tls:0, 
+lab_nginx_listen:unix:/tmp/nginx1.sock, 
+lab_haproxy_ports:, 
+</td>
+
+
+<!-- профиль нагрузки -->
+
+                                        <td class="table-area-property">runtime=5, THREAD: 1, REQUESTS_NUM: 1000000, CONCURRENT: 50, 
+BODY_PAYLOAD_SIZE:2 
+                                        </td>
+<!-- результат -->
+                                        <td class="table-area-property">
+
+<table style="border: none;">
+  <tr>
+    <td>RPS_AVG 205063</td>
+    <td>RPS_MAX 205063</td>
+    <td>BW: 29527900</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr style="background-color: #f2f2f2; font-weight: bold;">
+    <td style="font-weight: bold;">&nbsp;</td>
+    <td>max</td>
+    <td>median</td>
+    <td>p95</td>
+    <td>p99</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">request (us)</td>
+    <td style="text-decoration: underline;">22160</td>
+    <td style="text-decoration: underline;">158</td>
+    <td style="text-decoration: underline;">172</td>
+    <td style="text-decoration: underline;">213</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">connect (us)</td>
+    <td style="text-decoration: underline;">119</td>
+    <td style="text-decoration: underline;">40</td>
+    <td style="text-decoration: underline;">95</td>
+    <td style="text-decoration: underline;">119</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">TTFB (us)</td>
+    <td style="text-decoration: underline;">411</td>
+    <td style="text-decoration: underline;">131</td>
+    <td style="text-decoration: underline;">252</td>
+    <td style="text-decoration: underline;">411</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">req/s</td>
+    <td style="text-decoration: underline;">4103.86</td>
+    <td style="text-decoration: underline;">4101.77</td>
+    <td style="text-decoration: underline;">4103.24</td>
+    <td style="text-decoration: underline;">4103.86</td>
+  </tr>
+</table>
+
+
+</td>
+
+<!-- SVG -->
+                                        <td class="table-area-property">
+<a href="/data/1782912515" target="_blank" title="svg chart">
+    <img src="/data/1782912515/graph.svg" width="320" height="240" alt="svg chart" style="object-fit: contain;">
+</a>
+                                    </tr>
+                                    <tr class="table-area-object" data-id="1782912437">
+                                        <td data-id="1782912437" class="table-area-property check-multy">
+                                            <input type="checkbox" name="compare" value="1782912437" onchange="setSelections()">
+                                        </td>
+                                        <td class="table-area-property">#1782912437<br>(2026-07-01 16:27:17):<br> lab001: NGINX (backend) без TLS, UDS: /tmp/nginx1.sock</td>
+                                        <td class="table-area-property">виртуальная среда?: , AMD Ryzen 9 3900X 12-Core Processor (3793.02-MHz K8-class CPU)</td>
+                                        <td class="table-area-property">backend: X5-nginx, FRONTEND PROTO: http/1.1, BACKEND_PROTO:http/1.1, 
+lab_nginx_tls:0, 
+lab_haproxy_tls:0, 
+lab_nginx_listen:unix:/tmp/nginx1.sock, 
+lab_haproxy_ports:, 
+</td>
+
+
+<!-- профиль нагрузки -->
+
+                                        <td class="table-area-property">runtime=6, THREAD: 1, REQUESTS_NUM: 1000000, CONCURRENT: 50, 
+BODY_PAYLOAD_SIZE:64 
+                                        </td>
+<!-- результат -->
+                                        <td class="table-area-property">
+
+<table style="border: none;">
+  <tr>
+    <td>RPS_AVG 193208</td>
+    <td>RPS_MAX 193208</td>
+    <td>BW: 39992688</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr style="background-color: #f2f2f2; font-weight: bold;">
+    <td style="font-weight: bold;">&nbsp;</td>
+    <td>max</td>
+    <td>median</td>
+    <td>p95</td>
+    <td>p99</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">request (us)</td>
+    <td style="text-decoration: underline;">8930</td>
+    <td style="text-decoration: underline;">165</td>
+    <td style="text-decoration: underline;">187</td>
+    <td style="text-decoration: underline;">306</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">connect (us)</td>
+    <td style="text-decoration: underline;">102</td>
+    <td style="text-decoration: underline;">37</td>
+    <td style="text-decoration: underline;">96</td>
+    <td style="text-decoration: underline;">102</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">TTFB (us)</td>
+    <td style="text-decoration: underline;">292</td>
+    <td style="text-decoration: underline;">139</td>
+    <td style="text-decoration: underline;">258</td>
+    <td style="text-decoration: underline;">292</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">req/s</td>
+    <td style="text-decoration: underline;">3867.42</td>
+    <td style="text-decoration: underline;">3864.97</td>
+    <td style="text-decoration: underline;">3866.73</td>
+    <td style="text-decoration: underline;">3867.42</td>
+  </tr>
+</table>
+
+
+</td>
+
+<!-- SVG -->
+                                        <td class="table-area-property">
+<a href="/data/1782912437" target="_blank" title="svg chart">
+    <img src="/data/1782912437/graph.svg" width="320" height="240" alt="svg chart" style="object-fit: contain;">
+</a>
+                                    </tr>
+                                    <tr class="table-area-object" data-id="1782912000">
+                                        <td data-id="1782912000" class="table-area-property check-multy">
+                                            <input type="checkbox" name="compare" value="1782912000" onchange="setSelections()">
+                                        </td>
+                                        <td class="table-area-property">#1782912000<br>(2026-07-01 16:20:00):<br> lab004: NGINX (backend) с TLS, TCP: https://127.0.0.1:444</td>
+                                        <td class="table-area-property">виртуальная среда?: , AMD Ryzen 9 3900X 12-Core Processor (3793.02-MHz K8-class CPU)</td>
+                                        <td class="table-area-property">backend: X5-nginx, FRONTEND PROTO: http/1.1, BACKEND_PROTO:http/1.1, 
+lab_nginx_tls:1, 
+lab_haproxy_tls:0, 
+lab_nginx_listen:127.0.0.1:444, 
+lab_haproxy_ports:, 
+</td>
+
+
+<!-- профиль нагрузки -->
+
+                                        <td class="table-area-property">runtime=5, THREAD: 1, REQUESTS_NUM: 20000, CONCURRENT: 50, 
+BODY_PAYLOAD_SIZE:64 
+                                        </td>
+<!-- результат -->
+                                        <td class="table-area-property">
+
+<table style="border: none;">
+  <tr>
+    <td>RPS_AVG 4306</td>
+    <td>RPS_MAX 4306</td>
+    <td>BW: 620103</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr style="background-color: #f2f2f2; font-weight: bold;">
+    <td style="font-weight: bold;">&nbsp;</td>
+    <td>max</td>
+    <td>median</td>
+    <td>p95</td>
+    <td>p99</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">request (us)</td>
+    <td style="text-decoration: underline;">29720</td>
+    <td style="text-decoration: underline;">3990</td>
+    <td style="text-decoration: underline;">5850</td>
+    <td style="text-decoration: underline;">6400</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">connect (us)</td>
+    <td style="text-decoration: underline;">10700</td>
+    <td style="text-decoration: underline;">6230</td>
+    <td style="text-decoration: underline;">8860</td>
+    <td style="text-decoration: underline;">10700</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">TTFB (us)</td>
+    <td style="text-decoration: underline;">14130</td>
+    <td style="text-decoration: underline;">8480</td>
+    <td style="text-decoration: underline;">11400</td>
+    <td style="text-decoration: underline;">14130</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">req/s</td>
+    <td style="text-decoration: underline;">86.81</td>
+    <td style="text-decoration: underline;">86.24</td>
+    <td style="text-decoration: underline;">86.58</td>
+    <td style="text-decoration: underline;">86.81</td>
+  </tr>
+</table>
+
+
+</td>
+
+<!-- SVG -->
+                                        <td class="table-area-property">
+<a href="/data/1782912000" target="_blank" title="svg chart">
+    <img src="/data/1782912000/graph.svg" width="320" height="240" alt="svg chart" style="object-fit: contain;">
+</a>
+                                    </tr>
+                                    <tr class="table-area-object" data-id="1782911816">
+                                        <td data-id="1782911816" class="table-area-property check-multy">
+                                            <input type="checkbox" name="compare" value="1782911816" onchange="setSelections()">
+                                        </td>
+                                        <td class="table-area-property">#1782911816<br>(2026-07-01 16:16:56):<br> lab002: NGINX (backend) с TLS, UDS: /tmp/nginx1.sock</td>
+                                        <td class="table-area-property">виртуальная среда?: , AMD Ryzen 9 3900X 12-Core Processor (3793.02-MHz K8-class CPU)</td>
+                                        <td class="table-area-property">backend: X5-nginx, FRONTEND PROTO: http/1.1, BACKEND_PROTO:http/1.1, 
+lab_nginx_tls:1, 
+lab_haproxy_tls:0, 
+lab_nginx_listen:unix:/tmp/nginx1.sock, 
+lab_haproxy_ports:, 
+</td>
+
+
+<!-- профиль нагрузки -->
+
+                                        <td class="table-area-property">runtime=15, THREAD: 1, REQUESTS_NUM: 20000, CONCURRENT: 50, 
+BODY_PAYLOAD_SIZE:64 
+                                        </td>
+<!-- результат -->
+                                        <td class="table-area-property">
+
+<table style="border: none;">
+  <tr>
+    <td>RPS_AVG 1327</td>
+    <td>RPS_MAX 1327</td>
+    <td>BW: 191139</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr style="background-color: #f2f2f2; font-weight: bold;">
+    <td style="font-weight: bold;">&nbsp;</td>
+    <td>max</td>
+    <td>median</td>
+    <td>p95</td>
+    <td>p99</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">request (us)</td>
+    <td style="text-decoration: underline;">133290</td>
+    <td style="text-decoration: underline;">7710</td>
+    <td style="text-decoration: underline;">19730</td>
+    <td style="text-decoration: underline;">23030</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">connect (us)</td>
+    <td style="text-decoration: underline;">35600</td>
+    <td style="text-decoration: underline;">20910</td>
+    <td style="text-decoration: underline;">31560</td>
+    <td style="text-decoration: underline;">35600</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">TTFB (us)</td>
+    <td style="text-decoration: underline;">52620</td>
+    <td style="text-decoration: underline;">25420</td>
+    <td style="text-decoration: underline;">36780</td>
+    <td style="text-decoration: underline;">52620</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">req/s</td>
+    <td style="text-decoration: underline;">26.71</td>
+    <td style="text-decoration: underline;">26.58</td>
+    <td style="text-decoration: underline;">26.70</td>
+    <td style="text-decoration: underline;">26.71</td>
+  </tr>
+</table>
+
+
+</td>
+
+<!-- SVG -->
+                                        <td class="table-area-property">
+<a href="/data/1782911816" target="_blank" title="svg chart">
+    <img src="/data/1782911816/graph.svg" width="320" height="240" alt="svg chart" style="object-fit: contain;">
+</a>
+                                    </tr>
+                                    <tr class="table-area-object" data-id="1782910804">
+                                        <td data-id="1782910804" class="table-area-property check-multy">
+                                            <input type="checkbox" name="compare" value="1782910804" onchange="setSelections()">
+                                        </td>
+                                        <td class="table-area-property">#1782910804<br>(2026-07-01 16:00:04):<br> lab003: NGINX (backend) без TLS, TCP: http://127.0.0.1:81</td>
+                                        <td class="table-area-property">виртуальная среда?: , AMD Ryzen 9 3900X 12-Core Processor (3793.02-MHz K8-class CPU)</td>
+                                        <td class="table-area-property">backend: X5-nginx, FRONTEND PROTO: http/1.1, BACKEND_PROTO:http/1.1, 
+lab_nginx_tls:1, 
+lab_haproxy_tls:0, 
+lab_nginx_listen:unix:/tmp/nginx1.sock, 
+lab_haproxy_ports:, 
+</td>
+
+
+<!-- профиль нагрузки -->
+
+                                        <td class="table-area-property">runtime=17, THREAD: 1, REQUESTS_NUM: 1000000, CONCURRENT: 50, 
+BODY_PAYLOAD_SIZE:64 
+                                        </td>
+<!-- результат -->
+                                        <td class="table-area-property">
+
+<table style="border: none;">
+  <tr>
+    <td>RPS_AVG 60541</td>
+    <td>RPS_MAX 60541</td>
+    <td>BW: 8713666</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr style="background-color: #f2f2f2; font-weight: bold;">
+    <td style="font-weight: bold;">&nbsp;</td>
+    <td>max</td>
+    <td>median</td>
+    <td>p95</td>
+    <td>p99</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">request (us)</td>
+    <td style="text-decoration: underline;">19310</td>
+    <td style="text-decoration: underline;">414</td>
+    <td style="text-decoration: underline;">504</td>
+    <td style="text-decoration: underline;">656</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">connect (us)</td>
+    <td style="text-decoration: underline;">494</td>
+    <td style="text-decoration: underline;">291</td>
+    <td style="text-decoration: underline;">425</td>
+    <td style="text-decoration: underline;">494</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">TTFB (us)</td>
+    <td style="text-decoration: underline;">939</td>
+    <td style="text-decoration: underline;">571</td>
+    <td style="text-decoration: underline;">840</td>
+    <td style="text-decoration: underline;">939</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">req/s</td>
+    <td style="text-decoration: underline;">1211.25</td>
+    <td style="text-decoration: underline;">1210.93</td>
+    <td style="text-decoration: underline;">1211.18</td>
+    <td style="text-decoration: underline;">1211.25</td>
+  </tr>
+</table>
+
+
+</td>
+
+<!-- SVG -->
+                                        <td class="table-area-property">
+<a href="/data/1782910804" target="_blank" title="svg chart">
+    <img src="/data/1782910804/graph.svg" width="320" height="240" alt="svg chart" style="object-fit: contain;">
+</a>
+                                    </tr>
+                                    <tr class="table-area-object" data-id="1782910747">
+                                        <td data-id="1782910747" class="table-area-property check-multy">
+                                            <input type="checkbox" name="compare" value="1782910747" onchange="setSelections()">
+                                        </td>
+                                        <td class="table-area-property">#1782910747<br>(2026-07-01 15:59:07):<br> lab001: NGINX (backend) без TLS, UDS: /tmp/nginx1.sock</td>
+                                        <td class="table-area-property">виртуальная среда?: , AMD Ryzen 9 3900X 12-Core Processor (3793.02-MHz K8-class CPU)</td>
+                                        <td class="table-area-property">backend: X5-nginx, FRONTEND PROTO: http/1.1, BACKEND_PROTO:http/1.1, 
+lab_nginx_tls:1, 
+lab_haproxy_tls:0, 
+lab_nginx_listen:unix:/tmp/nginx1.sock, 
+lab_haproxy_ports:, 
+</td>
+
+
+<!-- профиль нагрузки -->
+
+                                        <td class="table-area-property">runtime=5, THREAD: 1, REQUESTS_NUM: 1000000, CONCURRENT: 50, 
+BODY_PAYLOAD_SIZE:64 
+                                        </td>
+<!-- результат -->
+                                        <td class="table-area-property">
+
+<table style="border: none;">
+  <tr>
+    <td>RPS_AVG 211003</td>
+    <td>RPS_MAX 211003</td>
+    <td>BW: 30387732</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr style="background-color: #f2f2f2; font-weight: bold;">
+    <td style="font-weight: bold;">&nbsp;</td>
+    <td>max</td>
+    <td>median</td>
+    <td>p95</td>
+    <td>p99</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">request (us)</td>
+    <td style="text-decoration: underline;">1750</td>
+    <td style="text-decoration: underline;">156</td>
+    <td style="text-decoration: underline;">169</td>
+    <td style="text-decoration: underline;">177</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">connect (us)</td>
+    <td style="text-decoration: underline;">114</td>
+    <td style="text-decoration: underline;">38</td>
+    <td style="text-decoration: underline;">109</td>
+    <td style="text-decoration: underline;">114</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">TTFB (us)</td>
+    <td style="text-decoration: underline;">297</td>
+    <td style="text-decoration: underline;">129</td>
+    <td style="text-decoration: underline;">259</td>
+    <td style="text-decoration: underline;">297</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">req/s</td>
+    <td style="text-decoration: underline;">4222.20</td>
+    <td style="text-decoration: underline;">4220.69</td>
+    <td style="text-decoration: underline;">4221.79</td>
+    <td style="text-decoration: underline;">4222.20</td>
+  </tr>
+</table>
+
+
+</td>
+
+<!-- SVG -->
+                                        <td class="table-area-property">
+<a href="/data/1782910747" target="_blank" title="svg chart">
+    <img src="/data/1782910747/graph.svg" width="320" height="240" alt="svg chart" style="object-fit: contain;">
+</a>
+                                    </tr>
+                                    <tr class="table-area-object" data-id="1782905422">
+                                        <td data-id="1782905422" class="table-area-property check-multy">
+                                            <input type="checkbox" name="compare" value="1782905422" onchange="setSelections()">
+                                        </td>
+                                        <td class="table-area-property">#1782905422<br>(2026-07-01 14:30:22):<br> lab001: NGINX (backend) без TLS, UDS: /tmp/nginx1.sock</td>
+                                        <td class="table-area-property">виртуальная среда?: , AMD Ryzen 9 3900X 12-Core Processor (3793.02-MHz K8-class CPU)</td>
+                                        <td class="table-area-property">backend: X5-nginx, FRONTEND PROTO: http/1.1, BACKEND_PROTO:http/1.1, 
+lab_nginx_tls:1, 
+lab_haproxy_tls:0, 
+lab_nginx_listen:unix:/tmp/nginx1.sock, 
+lab_haproxy_ports:, 
+</td>
+
+
+<!-- профиль нагрузки -->
+
+                                        <td class="table-area-property">runtime=0, THREAD: 1, REQUESTS_NUM: 100000, CONCURRENT: 50, 
+BODY_PAYLOAD_SIZE:64 
+                                        </td>
+<!-- результат -->
+                                        <td class="table-area-property">
+
+<table style="border: none;">
+  <tr>
+    <td>RPS_AVG 208265</td>
+    <td>RPS_MAX 208265</td>
+    <td>BW: 29989273</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr style="background-color: #f2f2f2; font-weight: bold;">
+    <td style="font-weight: bold;">&nbsp;</td>
+    <td>max</td>
+    <td>median</td>
+    <td>p95</td>
+    <td>p99</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">request (us)</td>
+    <td style="text-decoration: underline;">415</td>
+    <td style="text-decoration: underline;">158</td>
+    <td style="text-decoration: underline;">170</td>
+    <td style="text-decoration: underline;">189</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">connect (us)</td>
+    <td style="text-decoration: underline;">143</td>
+    <td style="text-decoration: underline;">50</td>
+    <td style="text-decoration: underline;">117</td>
+    <td style="text-decoration: underline;">143</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">TTFB (us)</td>
+    <td style="text-decoration: underline;">282</td>
+    <td style="text-decoration: underline;">151</td>
+    <td style="text-decoration: underline;">275</td>
+    <td style="text-decoration: underline;">282</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">req/s</td>
+    <td style="text-decoration: underline;">4172.76</td>
+    <td style="text-decoration: underline;">4169.33</td>
+    <td style="text-decoration: underline;">4171.97</td>
+    <td style="text-decoration: underline;">4172.76</td>
+  </tr>
+</table>
+
+
+</td>
+
+<!-- SVG -->
+                                        <td class="table-area-property">
+<a href="/data/1782905422" target="_blank" title="svg chart">
+    <img src="/data/1782905422/graph.svg" width="320" height="240" alt="svg chart" style="object-fit: contain;">
+</a>
+                                    </tr>
+                                    <tr class="table-area-object" data-id="1782905421">
+                                        <td data-id="1782905421" class="table-area-property check-multy">
+                                            <input type="checkbox" name="compare" value="1782905421" onchange="setSelections()">
+                                        </td>
+                                        <td class="table-area-property">#1782905421<br>(2026-07-01 14:30:21):<br> lab001: NGINX (backend) без TLS, UDS: /tmp/nginx1.sock</td>
+                                        <td class="table-area-property">виртуальная среда?: , AMD Ryzen 9 3900X 12-Core Processor (3793.02-MHz K8-class CPU)</td>
+                                        <td class="table-area-property">backend: X5-nginx, FRONTEND PROTO: http/1.1, BACKEND_PROTO:http/1.1, 
+lab_nginx_tls:1, 
+lab_haproxy_tls:0, 
+lab_nginx_listen:unix:/tmp/nginx1.sock, 
+lab_haproxy_ports:, 
+</td>
+
+
+<!-- профиль нагрузки -->
+
+                                        <td class="table-area-property">runtime=0, THREAD: 1, REQUESTS_NUM: 100000, CONCURRENT: 50, 
+BODY_PAYLOAD_SIZE:64 
+                                        </td>
+<!-- результат -->
+                                        <td class="table-area-property">
+
+<table style="border: none;">
+  <tr>
+    <td>RPS_AVG 208265</td>
+    <td>RPS_MAX 208265</td>
+    <td>BW: 29989273</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr style="background-color: #f2f2f2; font-weight: bold;">
+    <td style="font-weight: bold;">&nbsp;</td>
+    <td>max</td>
+    <td>median</td>
+    <td>p95</td>
+    <td>p99</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">request (us)</td>
+    <td style="text-decoration: underline;">415</td>
+    <td style="text-decoration: underline;">158</td>
+    <td style="text-decoration: underline;">170</td>
+    <td style="text-decoration: underline;">189</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">connect (us)</td>
+    <td style="text-decoration: underline;">143</td>
+    <td style="text-decoration: underline;">50</td>
+    <td style="text-decoration: underline;">117</td>
+    <td style="text-decoration: underline;">143</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">TTFB (us)</td>
+    <td style="text-decoration: underline;">282</td>
+    <td style="text-decoration: underline;">151</td>
+    <td style="text-decoration: underline;">275</td>
+    <td style="text-decoration: underline;">282</td>
+  </tr>
+  <tr>
+    <td style="background-color: #f2f2f2; font-weight: bold;">req/s</td>
+    <td style="text-decoration: underline;">4172.76</td>
+    <td style="text-decoration: underline;">4169.33</td>
+    <td style="text-decoration: underline;">4171.97</td>
+    <td style="text-decoration: underline;">4172.76</td>
+  </tr>
+</table>
+
+
+</td>
+
+<!-- SVG -->
+                                        <td class="table-area-property">
+<a href="/data/1782905421" target="_blank" title="svg chart">
+    <img src="/data/1782905421/graph.svg" width="320" height="240" alt="svg chart" style="object-fit: contain;">
+</a>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    <!-- </div> -->
+                </div>
+            </div>
+        </div>
+
+
+        <div class="footer">
+            <div class="controls controls-myb">
+                &copy; <a style="padding: 0px 5px;" href="https://disel.team/">DisEL</a>.
+            </div>
+        </div>
+
+        <form id="form_get" class="form" action="/scripts/run" method="post" style="display: none;">
+            <div class="form-header">
+                <span>Оценка производительности WEB/LB</span>
+                <button class="button" type="button" onclick="toggleForm(false)">
+                    <div class="button-content">
+                        <i class="fa fa-times-circle" style="color: #f15b5b;"></i>
+                    </div>
+                </button>
+            </div>
+
+            <div class="form-content">
+                <div class="form-field">
+                    <div class="input input-inset input-full">
+                        <label>Img type</label>
+                        <div class="input-content">
+                            <select name="type" id="type" class="new-select-item">
+                                <option value="iso">ISO-образ</option>
+                                <option value="raw">RAW-образ</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="form-field">
+                    <div class="input input-inset input-full">
+                        <label>Тест по-умолчанию (для автоматических сценариев)</label>
+                        <div class="input-content">
+                            <select name="profile" id="profile" class="new-select-item">
+                                <option value="all">all</option>
+                                <option value="manual" selected>manual</option>
+                                <option value="rps">rps</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="form-field">
+                    <div class="input input-inset input-full">
+                        <label>target (URL)</label>
+                        <div class="input-content">
+                            <input type="text" id="target" name="target" maxlength="30" size="20" value="http://127.0.0.1/index.html">
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="form-field">
+                    <div class="input input-inset input-full">
+                        <label>payloads_size (e.g.: 2, 4k, 1m, 1g ..)</label>
+                        <div class="input-content">
+                            <input type="text" id="payload_size" name="payload_size" maxlength="6" size="6" value="2">
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="form-field">
+                    <div class="input input-inset input-full">
+                        <label>concurrent (e.g.: '50' or range: '50-60')</label>
+                        <div class="input-content">
+                            <input type="text" id="concurrent" name="concurrent" maxlength="10" size="10" value="20-25">
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="form-field">
+                    <div class="input input-inset input-full">
+                        <label>threads</label>
+                        <div class="input-content">
+                            <input type="text" id="threads" name="threads" maxlength="3" size="3" value="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-field">
+                    <div class="input input-inset input-full">
+                        <label>requests_num</label>
+                        <div class="input-content">
+                            <input type="text" id="requests_num" name="requests_num" maxlength="10" size="10" value="1500000">
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="form-buttons">
+                <button id="performance_submit" type="submit" class="button white-color button-inset">
+                    <div class="button-content">
+                        <i class="fa fa-check-circle-o"></i>
+                        <span>Запуск</span>
+                    </div>
+                </button>
+            </div>
+        </form>
+
+        <div class="info-block" id="info_block" style="display: none;">
+            <ul class="list page">
+                <div class="header">
+                    <div class="text">
+                        <!-- <img alt="" width="128" height="128" src="/img/start.png"></img> -->
+                        <span>Как начать:</span>
+                    </div>
+                    <div class="controls"></div>
+                    <button class="button" onclick="toggleInfoBlock(false)">
+                        <div class="button-content">
+                            <i class="fa fa-times-circle" style="color: #f15b5b;"></i>
+                        </div>
+                    </button>
+                </div>
+
+                <li class="line">
+                    <div class="line-title">
+                        <span>
+                            1) test1
+                        </span>
+                    </div>
+                </li>
+
+                <li class="line">
+                    <div class="line-title">
+                        <span>
+                            2) test2
+                        </span>
+                    </div>
+                </li>
+
+                <li class="line">
+                    <div class="line-title">
+                        <span>
+                            Другие варианты:
+                        </span>
+                    </div>
+                    <ul class="list">
+                        <li class="line">
+                            <div class="middle line-title">
+                                <span>abc1</span>
+                            </div>
+                        </li>
+                        <li class="line">
+                            <div class="middle line-title">
+                                <span>abc2</span>
+                            </div>
+                        </li>
+                        <li class="line">
+                            <div class="middle line-title">
+                                <span>abc3</span>
+                            </div>
+                        </li>
+                        <li class="line">
+                            <div class="middle line-title">
+                                <span>abc4</span>
+                            </div>
+                        </li>
+                        <li class="line">
+                            <div class="middle line-title">
+                                <span>abc5</span>
+                            </div>
+                        </li>
+                        <li class="line">
+                            <div class="middle line-title">
+                                <span>abc6</span>
+                            </div>
+
+                            <div class="end line-title">
+                                <button class="button inset" title="title-test">
+                                    <div class="button-content">
+                                        <i class="fa fa-info"></i>
+                                    </div>
+                                </button>
+                            </div>
+                        </li>
+                    </ul>
+                </li>
+
+                <li class="line">
+                    <div class="line-title">
+                        <span>
+                            3) test33
+                        </span>
+                    </div>
+                </li>
+                <li class="line">
+                    <div class="line-title">
+                        <span>
+                            4) test44
+                        </span>
+                    </div>
+                </li>
+            </ul>
+        </div>
+
+        <script src="main.js"></script>
+    </body>
+</html>

@@ -1,0 +1,97 @@
+.list {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    background: #ffffff;
+    min-width: 350px;
+    width: 100%;
+    max-width: -webkit-fit-content;
+    max-width: -moz-fit-content;
+    max-width: fit-content;
+    box-shadow: 0px 0px 12px -6px #e6e6e6;
+    box-shadow: 0 0 0px 1px rgba(173, 173, 173, 0) inset, 0 1px 1px #cecece, 2px 2px 8px -4px #0000004a;
+    margin: 1px;
+  }
+  
+  .smart-list {
+    position: relative;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  }
+  
+  .line {
+    position: relative;
+    display: flex;
+    padding: 0;
+    width: 100%;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  }
+  
+  .line .button, .line .button-content, .input-content .button-content {
+    height: 26px;
+    width: 26px;
+  }
+  
+  .line-title {
+    min-width: 25%;
+    justify-content: space-between;
+    word-break: break-word;
+    padding: 3px !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: rgba(0, 0, 0, 0.6);
+    flex-direction: row;
+    font-weight: 100;
+    align-items: center;
+  }
+  
+  .line-title>span {
+    padding: 0px 8px;
+    max-width: 100%;
+  }
+  
+  .line-value {
+    flex-grow: 3;
+    flex-shrink: 1;
+    flex-direction: column;
+    z-index: 1;
+  }
+  
+  .line-value>.value {
+    position: relative;
+    display: flex;
+    min-height: 26px;
+    flex-grow: 1;
+    flex-direction: row;
+    font-weight: bolder;
+    justify-content: flex-end;
+    padding: 2px;
+  }
+  
+  
+  .line-content {
+    display: flex;
+    align-items: center;
+    padding: 4px;
+    padding-left: 8px;
+    padding-right: 6px;
+    font-size: 12px;
+    color: #4b5e61;
+    min-height: 26px;
+    word-break: break-word;
+    text-align: right;
+  }
+  
+  .end {
+    align-items: center;
+    display: flex;
+    flex-wrap: nowrap;
+    flex-direction: row;
+    align-content: center;
+    justify-content: flex-end;
+    flex: 1 0 auto;
+  }
+  

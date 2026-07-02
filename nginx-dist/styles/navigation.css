@@ -1,0 +1,25 @@
+.navigation-item {
+    padding: 9px;
+    color: #282828;
+    background-color: #f9f9f9;
+    cursor: pointer;
+    align-items: center;
+    outline: none;
+    transition: all .25s;
+    border-radius: 4px;
+    margin: 1px;
+    box-shadow: inset 0 0 0 1px hsla(0,0%,77.3%,.4), 0 1px 1px #ececec, 2px 2px 8px -4px rgba(0,0,0,.2901960784313726);
+    /* background: linear-gradient(135deg,#f3f3f3,#fff); */
+    border: 2px solid #fff;
+    overflow: hidden;
+  }
+  .navigation-item>span {
+    margin-left: 8px;
+    overflow: hidden;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+    text-align: start;
+    word-break: break-word;
+  }
+  

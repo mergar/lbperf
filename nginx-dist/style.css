@@ -1,0 +1,40 @@
+@import "styles/layout.css";
+@import "styles/list.css";
+@import "styles/form.css";
+@import "styles/navigation.css";
+@import "styles/table.css";
+@import "styles/footer.css";
+@import "styles/inputs.css";
+@import "styles/chart.css";
+@import "styles/dark.css";
+
+@font-face {
+  font-family:'Century Ghotic';
+  src:url('./assets/fonts/centurygothic.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family:'Century Ghotic Bold';
+  src:url('./assets/fonts/centurygothic_bold.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+* {
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  font-size: 12px;
+  font-family: 'Century Ghotic';
+}
+
+a {
+  text-decoration: none;
+}
+
+html, body {
+  height: 100%;
+}
+

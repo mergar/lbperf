@@ -1,0 +1,97 @@
+  .form {
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    color: rgba(0, 0, 0, 0.7);
+    box-shadow: 2px 3px 75px 1px rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    margin-top: 4px;
+    margin-left: 4px;
+  
+    position: absolute;
+    z-index: 9;
+    top: 60px;
+  }
+  
+  .form-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 14px;
+    border-bottom: 1px solid #eaeaea;
+    margin: 2px 8px;
+  }
+
+  .form-header > span {
+    color: #99999a;
+    padding: 16px;
+  }
+  
+  .form-content {
+    display: flex;
+    flex-direction: column;
+    min-width: 320px;
+  }
+
+  .form-content label {
+    padding: 4px 10px;
+    font-family: "Century Ghotic" !important;
+    font-size: 12px;
+  }
+  
+  .form-field {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .input-content {
+    display: flex;
+    width: 100%;
+  }
+
+  .input-content > input {
+    box-shadow: -10px -9px 12px 0px #fdfdfd inset, inset 3px 3px 10px 1px #e2e2e2, inset -4px -6px 8px -2px #efefef;
+    text-shadow: -3px 2px 5px #ffffff;
+    border: 2px solid #ffffff;
+    padding: 8px 12px;
+    margin: 1px 4px;
+    outline: 0;
+    border-radius: 6px;
+    color: #868686;
+    background: transparent;
+    display: flex;
+    width: 100%;
+  }
+  
+  .input-full {
+    width: 100%;
+    padding: 4px 10px;
+  }
+   
+  .new-select-item {
+    padding-right: 30px!important;
+    position: relative;
+    width: 100%;
+    min-height: 34px;
+    outline: 0;
+    padding: 2px;
+    border: 1px solid rgba(0,0,0,.1);
+    text-decoration: none;
+    cursor: pointer;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 3px;
+    
+    box-shadow: inset -10px -9px 12px 0 #fdfdfd, inset 3px 3px 10px 1px #e2e2e2, inset -4px -6px 8px -2px #efefef;
+    border-radius: 5px!important;
+  }
+  
+  .form-buttons {
+    display: flex;
+    justify-content: flex-end;
+    border-radius: 8px 0 0;
+    margin: 2px 8px;
+  }

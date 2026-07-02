@@ -1,0 +1,26 @@
+
+  .bars-r, .bars-l {
+    pointer-events: all;
+  }
+  
+  .bar {
+    rx: 4px;
+  }
+
+  .bar:hover{
+    opacity: 0.7;
+  }
+  
+  .chartInfo {
+    position: absolute;
+    z-index: 1;
+    bottom: 0px;
+    width: 420px;
+    height: 60px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chartInfo>span {
+    padding-bottom: 6px;
+  }

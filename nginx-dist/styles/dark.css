@@ -1,0 +1,180 @@
+
+.dark .header-myb, .dark .footer {
+    background: #393939;
+    box-shadow: 0 0 5px #000, 2px 2px 8px -4px rgba(66,66,66, .2901960784313726);
+}
+
+.dark .button {
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.2), 0 1px 1px #272727, 2px 2px 8px -4px rgba(36,36,36,.2901960784313726);
+    background: #393939;
+}
+
+.dark .button-content {
+    border-radius: 100px;
+    background: linear-gradient(175deg,#2e2e2e,#424242);
+    box-shadow: 0 -2px 8px 2px #454343, 3px 3px 10px 1px #0d0d0d, inset -3px -3px 5px -2px rgba(74,74,74,.8313725490196079);
+    text-shadow: -3px 2px 5px #2e2d2d;
+    border: 2px solid #363636;
+}
+
+.dark .button:disabled {
+    background: linear-gradient(183deg,#8b8989,#585858);
+    text-shadow: -3px 2px 5px #ddd;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.2), 0 1px 1px #272727, 2px 2px 8px -4px rgba(36,36,36,.2901960784313726);
+}
+  
+.dark .button:disabled .button-content {
+    box-shadow: 0 2px 8px 2px #6e6a6a, 2px 2px 10px -1px #787777, inset -4px -6px 8px -2px #6e6a6a;
+    background: linear-gradient(183deg,#8b8989,#464646);
+    border: 2px solid #605e5e;
+    text-shadow: -3px 2px 5px #5e5e5e;
+    color: #bfbfbf;
+}
+
+body.dark {
+    color: #8d8d8d;
+}
+
+body.dark::after {
+    background: linear-gradient(135deg,#1d1d1d,rgba(90,90,90,.7),#111d1d);
+}
+
+.dark .page {
+    background: #363838;
+    color: #8d8d8d;
+}
+
+.dark .info-block {
+    background: #0000008f;
+}
+
+.dark ::-webkit-scrollbar-track {
+    background-color: #afafaf;
+    border-left: 1px solid #e8e8e8;
+    border-right: 1px solid #e8e8e8;
+    border-radius: 4px;
+}
+  
+.dark ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+    background-color: #afafaf;
+    border-radius: 4px;
+}
+  
+.dark ::-webkit-scrollbar-thumb {
+    background-color: #363838;
+    border: 1px solid #afafaf;
+    border-radius: 4px;
+}
+
+.dark .list {
+    background: #393939;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.1), 0 1px 1px #030303, 2px 2px 8px -4px rgba(36,36,36,.2901960784313726);
+}
+
+.dark .smart-list {
+    border-bottom: 1px solid rgba(0,0,0,.1);
+}
+
+.dark .line {
+    border-bottom: 1px solid rgba(109,102,102,.79);
+}
+
+.dark .line-title {
+    color: #afafaf;
+}
+
+.dark .form {
+    background: #3a3a3a;
+    color: #8d8d8d;
+    border: 1px solid #3e3e3e;
+    box-shadow: 2px 3px 75px 1px #0c0c0c;
+}
+
+.dark .form-header {
+    border-bottom: 1px solid #2f2f2f;
+}
+
+.dark .form-header > span {    
+    color: #afafaf;
+}
+
+.dark .input-content > input {
+    text-shadow: -3px 2px 5px #2e2d2d;
+    border: 2px solid #363636;
+    background: transparent;
+    color: #b7b7b7;
+
+    box-shadow: inset -10px -9px 12px 0 #454343, inset 3px 3px 10px 1px #0d0d0d, inset -4px -6px 8px -2px rgba(74,74,74,.8313725490196079);
+}
+
+.dark .new-select-item {
+    background-color: #2f2f2f;
+    color: #afafaf;
+    box-shadow: inset -10px -9px 12px 0 #454343, inset 3px 3px 10px 1px #0d0d0d, inset -4px -6px 8px -2px rgba(74,74,74,.8313725490196079);
+}
+
+.dark .navigation-item {
+    color: #afafaf;
+    box-shadow: inset 0 0 0 1px rgba(29,29,29,.3), 0 1px 1px #252525, 2px 2px 8px -4px #000;
+    background: linear-gradient(135deg,#444242,#353535);
+    border: 2px solid #383737;
+}
+
+.dark .table {
+    background: #393939;
+}
+
+.dark .table.inset {
+    border: 1px solid #272727;
+}
+
+.dark .table-header {
+    color: rgba(26,46,71,.6);
+}
+
+.dark .table-column {
+    background: #624a74;
+    color: #fff;
+}
+
+.dark .table-area-object {
+    background: #303030;
+    color: #bababa;
+}
+
+.dark .table .table-area-object:nth-child(2n) {
+    background-color: #383838;
+}
+
+.dark .controls-myb {
+    background: #2f2f2f;
+    border: 1px solid #1f1f1f;
+    box-shadow: inset -6px -6px 12px 0 #454343, inset 0 0 10px 1px #0d0d0d, inset -4px -6px 8px -2px rgba(74,74,74,.8313725490196079);
+}
+
+.dark .checkbox {
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.1), 0 1px 1px #030303, 2px 2px 8px -4px rgba(36,36,36,.2901960784313726);
+    background: rgba(54,56,56,0);
+}
+
+.dark .checkbox-inset {
+    box-shadow: none;
+}
+
+.dark .checkbox-toggle {
+    background: #5a6f88;
+    box-shadow: inset -10px -9px 12px 0 rgba(39,39,39,.2), inset 0 1px 3px 1px #000;
+}
+
+
+.dark .checkbox-toggle::before {    
+    background-color: #454545;
+    box-shadow: inset -2px -3px 2px -2px #1d1d1d;
+    border: 1px solid #303030;
+}
+
+.dark .checkbox input[type=checkbox]:checked + .checkbox-toggle {
+    background: #2c862c;
+}
